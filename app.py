@@ -15,8 +15,15 @@ def load_nodes():
     """저장된 노드 데이터 불러오기"""
     global nodes_data
     if os.path.exists('nodes_data.json'):
-        with open('nodes_data.json', 'r', encoding='utf-8') as f:
-            nodes_data = json.load(f)
+        try:
+            with open('nodes_data.json', 'r', encoding='utf-8') as f:
+                nodes_data = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            # JSON 파일이 비어있거나 잘못된 형식인 경우 빈 리스트로 초기화
+            nodes_data = []
+            print("nodes_data.json 파일이 손상되었거나 비어있습니다. 새로 시작합니다.")
+    else:
+        nodes_data = []
 
 # 1. 포폴 업로드 탭 함수들
 def upload_portfolio_files(files):
@@ -357,4 +364,4 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
 
 # 앱 실행ㅋ
 if __name__ == "__main__":
-    app.launch(share=True, debug=True) 
+    app.launch(share=True, debug=True)
