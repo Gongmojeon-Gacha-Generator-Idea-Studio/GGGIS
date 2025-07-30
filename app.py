@@ -1,15 +1,23 @@
 import gradio as gr
 import json
 import os
+import pandas as pd
 from typing import List, Dict, Any
 
 # 노드 데이터를 저장할 전역 변수
 nodes_data = []
+# 아이디어 데이터를 저장할 전역 변수
+ideas_data = []
 
 def save_nodes():
     """노드 데이터를 JSON 파일로 저장"""
     with open('nodes_data.json', 'w', encoding='utf-8') as f:
         json.dump(nodes_data, f, ensure_ascii=False, indent=2)
+
+def save_ideas():
+    """아이디어 데이터를 JSON 파일로 저장"""
+    with open('ideas_data.json', 'w', encoding='utf-8') as f:
+        json.dump(ideas_data, f, ensure_ascii=False, indent=2)
 
 def load_nodes():
     """저장된 노드 데이터 불러오기"""
@@ -19,11 +27,23 @@ def load_nodes():
             with open('nodes_data.json', 'r', encoding='utf-8') as f:
                 nodes_data = json.load(f)
         except (json.JSONDecodeError, ValueError):
-            # JSON 파일이 비어있거나 잘못된 형식인 경우 빈 리스트로 초기화
             nodes_data = []
             print("nodes_data.json 파일이 손상되었거나 비어있습니다. 새로 시작합니다.")
     else:
         nodes_data = []
+
+def load_ideas():
+    """저장된 아이디어 데이터 불러오기"""
+    global ideas_data
+    if os.path.exists('ideas_data.json'):
+        try:
+            with open('ideas_data.json', 'r', encoding='utf-8') as f:
+                ideas_data = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            ideas_data = []
+            print("ideas_data.json 파일이 손상되었거나 비어있습니다. 새로 시작합니다.")
+    else:
+        ideas_data = []
 
 # 1. 포폴 업로드 탭 함수들
 def upload_portfolio_files(files):
@@ -45,15 +65,10 @@ def process_uploaded_files(files_display):
         return "업로드된 파일이 없습니다."
     
     # TODO: 실제 AI 분석 로직 구현
-    # 현재는 샘플 노드 생성
     sample_node = {
         "title": "AI 분석된 프로젝트",
-        "competition": "업로드 파일에서 추출",
-        "problem": "파일에서 분석된 문제점",
-        "solution": "파일에서 추출된 솔루션",
-        "features": ["기능1", "기능2", "기능3"],
-        "weaknesses": "분석된 약점",
-        "links": "",
+        "solution": "업로드된 파일에서 분석된 솔루션과 핵심 기능들을 포함한 상세 설명",
+        "tags": ["AI", "데이터분석", "웹개발"],
         "source": "파일 업로드"
     }
     
@@ -63,22 +78,35 @@ def process_uploaded_files(files_display):
     return "파일 분석이 완료되어 노드가 생성되었습니다!"
 
 # 2. 노드 입력하기 탭 함수들
-def create_node(title, competition, problem, solution, features, weaknesses, links):
-    """사용자 입력으로 새 노드 생성"""
-    if not title or not competition or not problem or not solution:
-        return "필수 항목을 모두 입력해주세요."
+def add_keyword(keyword, current_tags):
+    """키워드 추가"""
+    if not keyword:
+        return current_tags, "키워드를 입력해주세요."
     
-    # 핵심 기능을 리스트로 변환
-    features_list = [f.strip() for f in features.split(',') if f.strip()]
+    if current_tags:
+        tags_list = [tag.strip() for tag in current_tags.split(',') if tag.strip()]
+    else:
+        tags_list = []
+    
+    if keyword not in tags_list:
+        tags_list.append(keyword)
+        updated_tags = ', '.join(tags_list)
+        return updated_tags, f"'{keyword}' 키워드가 추가되었습니다."
+    else:
+        return current_tags, "이미 존재하는 키워드입니다."
+
+def create_node(title, solution, tags):
+    """사용자 입력으로 새 노드 생성"""
+    if not title or not solution:
+        return "프로젝트 제목과 솔루션을 모두 입력해주세요."
+    
+    # 태그를 리스트로 변환
+    tags_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
     
     new_node = {
         "title": title,
-        "competition": competition,
-        "problem": problem,
         "solution": solution,
-        "features": features_list,
-        "weaknesses": weaknesses if weaknesses else "없음",
-        "links": links if links else "없음",
+        "tags": tags_list,
         "source": "직접 입력"
     }
     
@@ -88,43 +116,34 @@ def create_node(title, competition, problem, solution, features, weaknesses, lin
     return "새 노드가 성공적으로 생성되었습니다!"
 
 # 3. 내 노드 확인하기 탭 함수들
-def get_nodes_display():
-    """저장된 노드들을 표시용 텍스트로 변환"""
+def get_nodes_dataframe(filter_tag=""):
+    """저장된 노드들을 데이터프레임으로 변환"""
     if not nodes_data:
-        return "아직 생성된 노드가 없습니다."
+        return pd.DataFrame()
     
-    display_text = ""
-    for i, node in enumerate(nodes_data, 1):
-        display_text += f"""
-### 📌 노드 {i}: {node['title']}
-**공모전명:** {node['competition']}  
-**데이터 소스:** {node['source']}
-
-<details>
-<summary>상세 정보 보기</summary>
-
-**문제점:** {node['problem']}
-
-**솔루션:** {node['solution']}
-
-**핵심 기능:**
-{chr(10).join([f"• {feature}" for feature in node['features']])}
-
-**기술적/현실적 약점:** {node['weaknesses']}
-
-**관련 링크:** {node['links']}
-
-</details>
-
----
-"""
+    # 필터링된 노드들
+    filtered_nodes = []
+    for node in nodes_data:
+        if not filter_tag or filter_tag in node.get('tags', []):
+            filtered_nodes.append({
+                "프로젝트 제목": node['title'],
+                "솔루션 소개": node['solution'][:100] + "..." if len(node['solution']) > 100 else node['solution'],
+                "태그": ', '.join(node.get('tags', [])),
+                "출처": node.get('source', '직접 입력')
+            })
     
-    return display_text
+    return pd.DataFrame(filtered_nodes)
 
-def refresh_nodes():
-    """노드 목록 새로고침"""
-    load_nodes()
-    return get_nodes_display()
+def filter_nodes(filter_tag):
+    """태그로 노드 필터링"""
+    return get_nodes_dataframe(filter_tag)
+
+def get_all_tags():
+    """모든 노드의 태그 목록 반환"""
+    all_tags = set()
+    for node in nodes_data:
+        all_tags.update(node.get('tags', []))
+    return [""] + sorted(list(all_tags))
 
 # 4. AI 아이디어 생성 탭 함수들
 def add_team_member(member_code, current_members):
@@ -132,7 +151,6 @@ def add_team_member(member_code, current_members):
     if not member_code:
         return current_members, "팀원 코드를 입력해주세요."
     
-    # TODO: 실제 팀원 정보 조회 로직 구현
     new_member = f"👤 {member_code} (닉네임)"
     
     if current_members:
@@ -147,9 +165,7 @@ def generate_idea_chatgpt(competition_name, is_development, category, team_membe
     if not competition_name:
         return "공모전 이름을 입력해주세요."
     
-    # TODO: 실제 ChatGPT API 연동
-    sample_idea = f"""
-## 🤖 ChatGPT 생성 아이디어
+    idea_content = f"""## 🤖 ChatGPT 생성 아이디어
 
 **공모전:** {competition_name}
 **개발 여부:** {is_development}
@@ -172,19 +188,30 @@ def generate_idea_chatgpt(competition_name, is_development, category, team_membe
 • 웹/앱 개발 경험
 
 **차별점:**
-기존 환경 모니터링 시스템과 달리, 개인 사용자도 쉽게 참여할 수 있는 접근성과 AI 예측 기능을 결합
-"""
+기존 환경 모니터링 시스템과 달리, 개인 사용자도 쉽게 참여할 수 있는 접근성과 AI 예측 기능을 결합"""
     
-    return sample_idea
+    # 아이디어 저장
+    new_idea = {
+        "title": "스마트 환경 모니터링 시스템",
+        "competition": competition_name,
+        "generator": "ChatGPT",
+        "summary": "IoT와 데이터 분석을 활용한 실시간 환경 모니터링 및 예측 시스템",
+        "content": idea_content,
+        "category": category,
+        "development_type": is_development
+    }
+    
+    ideas_data.append(new_idea)
+    save_ideas()
+    
+    return idea_content
 
 def generate_idea_gemini(competition_name, is_development, category, team_members):
     """Gemini로 아이디어 생성"""
     if not competition_name:
         return "공모전 이름을 입력해주세요."
     
-    # TODO: 실제 Gemini API 연동
-    sample_idea = f"""
-## 🎯 Gemini 생성 아이디어
+    idea_content = f"""## 🎯 Gemini 생성 아이디어
 
 **공모전:** {competition_name}
 **개발 여부:** {is_development}
@@ -207,13 +234,57 @@ def generate_idea_gemini(competition_name, is_development, category, team_member
 • 데이터 기반 의사결정 경험
 
 **혁신성:**
-단순한 아이디어 제안을 넘어서, 실제 실행 가능한 프로젝트로 연결하는 구조적 접근
-"""
+단순한 아이디어 제안을 넘어서, 실제 실행 가능한 프로젝트로 연결하는 구조적 접근"""
     
-    return sample_idea
+    # 아이디어 저장
+    new_idea = {
+        "title": "협업 기반 지역 문제 해결 플랫폼",
+        "competition": competition_name,
+        "generator": "Gemini",
+        "summary": "지역 주민과 다양한 배경의 사람들이 협업하여 실질적 문제를 해결하는 플랫폼",
+        "content": idea_content,
+        "category": category,
+        "development_type": is_development
+    }
+    
+    ideas_data.append(new_idea)
+    save_ideas()
+    
+    return idea_content
 
-# 앱 시작 시 노드 데이터 로드
+# 5. 생성된 아이디어 확인하기 탭 함수들
+def get_ideas_display():
+    """생성된 아이디어들을 표시용으로 변환"""
+    if not ideas_data:
+        return "아직 생성된 아이디어가 없습니다."
+    
+    display_items = []
+    for i, idea in enumerate(ideas_data):
+        card = f"""
+<div style="border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 8px 0; background: #f9f9f9;">
+    <h3>💡 {idea['title']}</h3>
+    <p><strong>생성 AI:</strong> {idea['generator']} | <strong>공모전:</strong> {idea['competition']}</p>
+    <p><strong>요약:</strong> {idea['summary']}</p>
+    <details>
+        <summary>자세한 내용 보기</summary>
+        <div style="margin-top: 12px; padding: 12px; background: white; border-radius: 4px;">
+            {idea['content'].replace('\n', '<br>')}
+        </div>
+    </details>
+</div>
+"""
+        display_items.append(card)
+    
+    return "".join(display_items)
+
+def refresh_ideas():
+    """아이디어 목록 새로고침"""
+    load_ideas()
+    return get_ideas_display()
+
+# 앱 시작 시 데이터 로드
 load_nodes()
+load_ideas()
 
 # Gradio 인터페이스 구성
 with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
@@ -262,39 +333,33 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
             
             with gr.Column():
                 title_input = gr.Textbox(label="1. 프로젝트 제목", placeholder="프로젝트 제목을 입력하세요")
-                competition_input = gr.Textbox(label="2. 참가 공모전명", placeholder="참가한 공모전 이름을 입력하세요")
-                problem_input = gr.Textbox(
-                    label="3. 이 프로젝트는 어떤 문제를 해결하나요?",
-                    lines=3,
-                    placeholder="해결하고자 한 문제를 구체적으로 설명해주세요"
-                )
                 solution_input = gr.Textbox(
-                    label="4. 당신의 솔루션은 무엇인가요? (주요 대상을 포함하여 작성해주세요.)",
-                    lines=3,
-                    placeholder="솔루션과 주요 대상을 포함하여 설명해주세요"
+                    label="2. 당신의 솔루션에 대해 소개해주세요. (핵심기능과 사용 기술을 포함하여 작성해주세요.)",
+                    lines=5,
+                    placeholder="솔루션의 핵심 기능과 사용된 기술을 포함하여 자세히 설명해주세요"
                 )
-                features_input = gr.Textbox(
-                    label="5. 핵심 기능을 2~4개 적어주세요. (사용한 기술을 포함하여 작성해주세요.)",
-                    lines=3,
-                    placeholder="핵심 기능을 쉼표로 구분하여 입력하세요 (예: 실시간 데이터 처리, AI 기반 추천 시스템, 모바일 앱 개발)"
-                )
-                weaknesses_input = gr.Textbox(
-                    label="6. 기술적/현실적인 약점이 있다면 무엇인가요? (선택)",
-                    lines=2,
-                    placeholder="약점이나 한계점이 있다면 입력하세요"
-                )
-                links_input = gr.Textbox(
-                    label="7. notion/figma/slides 링크 (선택)",
-                    placeholder="관련 링크가 있다면 입력하세요"
-                )
+                
+                gr.Markdown("#### 3. 솔루션에 대한 키워드를 입력해주세요")
+                with gr.Row():
+                    keyword_input = gr.Textbox(label="키워드", placeholder="키워드를 입력하세요")
+                    add_keyword_btn = gr.Button("➕ 키워드 추가", variant="secondary")
+                
+                tags_display = gr.Textbox(label="추가된 키워드", interactive=False, placeholder="키워드가 여기에 표시됩니다")
+                keyword_status = gr.Textbox(label="키워드 추가 상태", interactive=False)
             
             create_btn = gr.Button("✨ 노드 생성하기", variant="primary", size="lg")
             create_status = gr.Textbox(label="생성 결과", interactive=False)
             
             # 이벤트 연결
+            add_keyword_btn.click(
+                add_keyword,
+                inputs=[keyword_input, tags_display],
+                outputs=[tags_display, keyword_status]
+            )
+            
             create_btn.click(
                 create_node,
-                inputs=[title_input, competition_input, problem_input, solution_input, features_input, weaknesses_input, links_input],
+                inputs=[title_input, solution_input, tags_display],
                 outputs=[create_status]
             )
         
@@ -302,13 +367,32 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
         with gr.Tab("📋 내 노드 확인하기"):
             gr.Markdown("### 생성된 모든 노드를 확인하고 관리하세요")
             
-            refresh_btn = gr.Button("🔄 새로고침", variant="secondary")
-            nodes_display = gr.Markdown(get_nodes_display())
+            with gr.Row():
+                refresh_btn = gr.Button("🔄 새로고침", variant="secondary")
+                tag_filter = gr.Dropdown(
+                    label="태그로 필터링",
+                    choices=get_all_tags(),
+                    value="",
+                    allow_custom_value=False
+                )
+            
+            nodes_dataframe = gr.Dataframe(
+                value=get_nodes_dataframe(),
+                headers=["프로젝트 제목", "솔루션 소개", "태그", "출처"],
+                interactive=False,
+                wrap=True
+            )
             
             # 이벤트 연결
             refresh_btn.click(
-                refresh_nodes,
-                outputs=[nodes_display]
+                lambda: [get_nodes_dataframe(), get_all_tags()],
+                outputs=[nodes_dataframe, tag_filter]
+            )
+            
+            tag_filter.change(
+                filter_nodes,
+                inputs=[tag_filter],
+                outputs=[nodes_dataframe]
             )
         
         # 4. AI 아이디어 생성 탭
@@ -361,7 +445,20 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
                 inputs=[comp_name, is_dev, category, team_members_display],
                 outputs=[idea_output]
             )
+        
+        # 5. 생성된 아이디어 확인하기 탭
+        with gr.Tab("💭 생성된 아이디어 확인하기"):
+            gr.Markdown("### ChatGPT와 Gemini로 생성된 아이디어를 확인하세요")
+            
+            refresh_ideas_btn = gr.Button("🔄 새로고침", variant="secondary")
+            ideas_display = gr.HTML(get_ideas_display())
+            
+            # 이벤트 연결
+            refresh_ideas_btn.click(
+                refresh_ideas,
+                outputs=[ideas_display]
+            )
 
-# 앱 실행ㅋ
+# 앱 실행
 if __name__ == "__main__":
     app.launch(share=True, debug=True)
