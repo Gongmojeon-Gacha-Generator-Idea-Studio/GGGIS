@@ -45,4 +45,12 @@ def load_ideas():
 def initialize_data():
     """앱 시작 시 데이터 초기화"""
     load_nodes()
-    load_ideas() 
+    load_ideas()
+
+def get_ideas_data():
+    """ideas_data 반환"""
+    return ideas_data
+
+def get_nodes_data():
+    """nodes_data 반환"""
+    return nodes_data 
