@@ -355,6 +355,6 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
                 outputs=[idea_output]
             )
 
-# 앱 실행
+# 앱 실행ㅋ
 if __name__ == "__main__":
     app.launch(share=True, debug=True) 
