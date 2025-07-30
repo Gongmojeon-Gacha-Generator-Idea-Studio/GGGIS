@@ -1,0 +1,9 @@
+# macOS 시스템 파일
+.DS_Store
+
+# 빌드 결과물
+dist/
+build/
+
+# 환경 변수 파일
+.env
