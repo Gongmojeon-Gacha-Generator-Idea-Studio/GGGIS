@@ -7,3 +7,5 @@ build/
 
 # 환경 변수 파일
 .env
+
+/__pycache__/
