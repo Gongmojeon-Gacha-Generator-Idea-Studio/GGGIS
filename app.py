@@ -105,9 +105,6 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 "### AI로 생성된 아이디어를 확인하고 상세 내용을 볼 수 있습니다"
             )
 
-            with gr.Row():
-                refresh_ideas_btn = gr.Button("🔄 새로고침", variant="secondary")
-
             # 아이디어 목록
             ideas_dataframe = gr.Dataframe(
                 value=get_ideas_dataframe(),
@@ -153,22 +150,6 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 )
 
             # 이벤트 연결
-            refresh_ideas_btn.click(
-                fn=refresh_and_reset,
-                outputs=[
-                    ideas_dataframe,
-                    delete_idea_btn,
-                    delete_status,
-                    selected_title,
-                    contest_info_display,
-                    problem_display,
-                    solution_display,
-                    implementation_display,
-                    expected_effect_display,
-                    created_at_display,
-                    idea_generation_status,  # 아이디어 생성 상태 초기화
-                ],
-            )
 
             ideas_dataframe.select(
                 fn=handle_idea_selection,
@@ -260,13 +241,18 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 title_input = gr.Textbox(
                     label="1. 노드 제목", placeholder="노드 제목을 입력하세요"
                 )
-                solution_input = gr.Textbox(
+                description_input = gr.Textbox(
                     label="2. 노드에 대해 소개해주세요. (핵심기능과 사용 기술을 포함하여 작성해주세요.)",
                     lines=5,
                     placeholder="노드의 핵심 기능과 사용된 기술을 포함하여 자세히 설명해주세요",
                 )
 
-                gr.Markdown("#### 노드에 대한 키워드를 입력해주세요")
+                tenant_input = gr.Textbox(
+                    label="3. 테넌트 (그룹)",
+                    placeholder="이 노드가 속할 그룹을 입력하세요 (예: 국민대, SuperbAI)",
+                )
+
+                gr.Markdown("#### 4. 노드에 대한 키워드를 입력해주세요")
                 with gr.Row():
                     keyword_input = gr.Textbox(
                         label="키워드",
@@ -305,11 +291,12 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
 
             create_btn.click(
                 create_node,
-                inputs=[title_input, solution_input, tags_display],
+                inputs=[title_input, description_input, tenant_input, tags_display],
                 outputs=[
                     create_status,
                     title_input,
-                    solution_input,
+                    description_input,
+                    tenant_input,
                     keyword_input,
                     tags_display,
                     keyword_status,
@@ -320,51 +307,86 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
         with gr.Tab("📋 내 노드 확인하기") as node_view_tab:
             gr.Markdown("### 생성된 모든 노드를 확인하고 관리하세요")
 
+            # 필터링 옵션들
             with gr.Row():
-                refresh_btn = gr.Button("🔄 새로고침", variant="secondary")
+                search_input = gr.Textbox(
+                    label="🔍 노드 이름 검색",
+                    placeholder="검색할 노드 이름을 입력하세요...",
+                    scale=2,
+                )
+
+            with gr.Row():
+                tenant_filter = gr.Dropdown(
+                    label="🏢 테넌트 필터 (다중선택)",
+                    choices=[],  # 초기에는 빈 리스트
+                    multiselect=True,
+                    scale=1,
+                )
                 tag_filter = gr.Dropdown(
-                    label="태그로 필터링",
-                    choices=get_all_tags(),
-                    value="",
-                    allow_custom_value=False,
+                    label="🏷️ 태그 필터 (다중선택)",
+                    choices=[],  # 초기에는 빈 리스트
+                    multiselect=True,
+                    scale=1,
                 )
 
             nodes_dataframe = gr.Dataframe(
                 value=get_nodes_dataframe(),
-                headers=["프로젝트 제목", "솔루션 소개", "태그", "출처"],
+                headers=["생성일자", "노드 이름", "테넌트", "설명", "태그"],
                 interactive=False,
-                wrap=True,
+                wrap=False,
+                elem_id="nodes_table",
             )
 
-            # 이벤트 연결
-            refresh_btn.click(refresh_nodes, outputs=[nodes_dataframe, tag_filter])
+            # 이벤트 연결 - 모든 필터 변경 시 실시간 필터링
+            for filter_component in [search_input, tenant_filter, tag_filter]:
+                filter_component.change(
+                    filter_nodes_multi,
+                    inputs=[search_input, tenant_filter, tag_filter],
+                    outputs=[nodes_dataframe],
+                )
 
-            tag_filter.change(
-                filter_nodes, inputs=[tag_filter], outputs=[nodes_dataframe]
-            )
+            # 내 노드 확인하기 탭 클릭시 자동 새로고침 및 상태 초기화
+            def refresh_and_clear_status():
+                df, tags, tenants = refresh_nodes()
+                return (
+                    df,
+                    "",  # 검색 입력 초기화
+                    gr.update(choices=tenants, value=[]),  # 테넌트 필터 업데이트
+                    gr.update(choices=tags, value=[]),  # 태그 필터 업데이트
+                    "",  # 아이디어 생성 상태 초기화
+                    "",  # 노드 생성 상태 초기화
+                )
 
-            # 노드 입력하기 탭 클릭시 아이디어 생성 상태 및 노드 생성 상태 초기화
-            node_input_tab.select(
-                fn=lambda: ("", ""),  # 아이디어 생성 상태와 노드 생성 상태 초기화
-                outputs=[idea_generation_status, create_status],
-            )
-
-            # 내 노드 확인하기 탭 클릭시 아이디어 생성 상태 및 노드 생성 상태 초기화
             node_view_tab.select(
-                fn=lambda: ("", ""),  # 아이디어 생성 상태와 노드 생성 상태 초기화
-                outputs=[idea_generation_status, create_status],
+                fn=refresh_and_clear_status,
+                outputs=[
+                    nodes_dataframe,
+                    search_input,
+                    tenant_filter,
+                    tag_filter,
+                    idea_generation_status,
+                    create_status,
+                ],
             )
 
         # 탭 간 상태 초기화 이벤트 (모든 컴포넌트 정의 후)
-    # AI 아이디어 생성 탭 및 포폴 업로드 탭 클릭시 노드 생성 상태 초기화
+
+    # AI 아이디어 생성 탭 클릭시 노드 생성 상태만 초기화
     idea_generation_tab.select(
         fn=lambda: "",
         outputs=[create_status],
     )
 
+    # 포폴 업로드 탭 클릭시 노드 생성 상태만 초기화
     portfolio_upload_tab.select(
         fn=lambda: "",
         outputs=[create_status],
+    )
+
+    # 노드 입력하기 탭 클릭시 아이디어 생성 상태, 노드 생성 상태만 초기화
+    node_input_tab.select(
+        fn=lambda: ("", ""),
+        outputs=[idea_generation_status, create_status],
     )
 
 # 앱 실행

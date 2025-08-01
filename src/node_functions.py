@@ -1,5 +1,6 @@
 import pandas as pd
 import src.data_manager as dm
+from datetime import datetime
 
 
 def upload_portfolio_files(files):
@@ -24,9 +25,10 @@ def process_uploaded_files(files_display):
     # TODO: 실제 AI 분석 로직 구현
     sample_node = {
         "title": "AI 분석된 프로젝트",
-        "solution": "업로드된 파일에서 분석된 솔루션과 핵심 기능들을 포함한 상세 설명",
+        "description": "업로드된 파일에서 분석된 솔루션과 핵심 기능들을 포함한 상세 설명",
+        "tenant": "AI 분석",
         "tags": ["AI", "데이터분석", "웹개발"],
-        "source": "파일 업로드",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     dm.nodes_data.append(sample_node)
@@ -82,17 +84,30 @@ def add_keyword(keyword, current_tags):
     return updated_tags, "", f"✅ 키워드가 추가되었습니다: {added_list}"
 
 
-def create_node(title, solution, tags):
+def create_node(title, description, tenant, tags):
     """사용자 입력으로 새 노드 생성"""
     print(
-        f"[DEBUG] create_node 호출됨 - title: {title}, solution 길이: {len(solution) if solution else 0}, tags: {tags}"
+        f"[DEBUG] create_node 호출됨 - title: {title}, description 길이: {len(description) if description else 0}, tenant: {tenant}, tags: {tags}"
     )
 
-    if not title or not solution:
+    if not title or not description:
         return (
-            "❌ 프로젝트 제목과 솔루션을 모두 입력해주세요.",
+            "❌ 프로젝트 제목과 설명을 모두 입력해주세요.",
             title,
-            solution,
+            description,
+            tenant,
+            "",
+            tags,
+            "",
+        )
+
+    # 테넌트 필수 검증
+    if not tenant:
+        return (
+            "❌ 테넌트(그룹)를 입력해주세요.",
+            title,
+            description,
+            tenant,
             "",
             tags,
             "",
@@ -103,15 +118,24 @@ def create_node(title, solution, tags):
 
     # 키워드 필수 검증
     if not tags_list:
-        return "❌ 키워드를 최소 1개 이상 입력해주세요!", title, solution, "", tags, ""
+        return (
+            "❌ 키워드를 최소 1개 이상 입력해주세요!",
+            title,
+            description,
+            tenant,
+            "",
+            tags,
+            "",
+        )
 
     print(f"[DEBUG] 태그 리스트 변환 완료: {tags_list}")
 
     new_node = {
         "title": title,
-        "solution": solution,
+        "description": description,
+        "tenant": tenant.strip(),
         "tags": tags_list,
-        "source": "직접 입력",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     print(f"[DEBUG] 새 노드 생성: {new_node}")
@@ -123,37 +147,58 @@ def create_node(title, solution, tags):
     dm.save_nodes()
 
     # 성공시 모든 필드 초기화
-    return "✅ 새 노드가 성공적으로 생성되었습니다!", "", "", "", "", ""
+    return "✅ 새 노드가 성공적으로 생성되었습니다!", "", "", "", "", "", ""
 
 
-def get_nodes_dataframe(filter_tag=""):
-    """저장된 노드들을 데이터프레임으로 변환"""
+def get_nodes_dataframe(search_text="", selected_tenants=None, selected_tags=None):
+    """저장된 노드들을 데이터프레임으로 변환 (다중 필터 지원)"""
+    # 컬럼명 정의
+    columns = ["생성일자", "노드 이름", "테넌트", "설명", "태그"]
+
     if not dm.nodes_data:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=columns)
 
     # 필터링된 노드들
     filtered_nodes = []
     for node in dm.nodes_data:
-        if not filter_tag or filter_tag in node.get("tags", []):
-            filtered_nodes.append(
-                {
-                    "프로젝트 제목": node["title"],
-                    "솔루션 소개": (
-                        node["solution"][:100] + "..."
-                        if len(node["solution"]) > 100
-                        else node["solution"]
-                    ),
-                    "태그": ", ".join(node.get("tags", [])),
-                    "출처": node.get("source", "직접 입력"),
-                }
-            )
+        # 텍스트 검색 필터 (노드 이름에서 검색)
+        if search_text and search_text.lower() not in node["title"].lower():
+            continue
+
+        # 테넌트 필터
+        if selected_tenants and node.get("tenant", "미지정") not in selected_tenants:
+            continue
+
+        # 태그 필터 (선택된 태그 중 하나라도 포함되어야 함)
+        if selected_tags:
+            node_tags = node.get("tags", [])
+            if not any(tag in node_tags for tag in selected_tags):
+                continue
+
+        filtered_nodes.append(
+            {
+                "생성일자": node.get("created_at", "미상"),
+                "노드 이름": node["title"],
+                "테넌트": node.get("tenant", "미지정"),
+                "설명": (
+                    node["description"][:100] + "..."
+                    if len(node["description"]) > 100
+                    else node["description"]
+                ),
+                "태그": ", ".join(node.get("tags", [])),
+            }
+        )
+
+    # 필터링 결과가 없어도 컬럼명이 유지되도록 빈 DataFrame 반환
+    if not filtered_nodes:
+        return pd.DataFrame(columns=columns)
 
     return pd.DataFrame(filtered_nodes)
 
 
-def filter_nodes(filter_tag):
-    """태그로 노드 필터링"""
-    return get_nodes_dataframe(filter_tag)
+def filter_nodes_multi(search_text, selected_tenants, selected_tags):
+    """다중 필터로 노드 필터링"""
+    return get_nodes_dataframe(search_text, selected_tenants, selected_tags)
 
 
 def get_all_tags():
@@ -161,10 +206,20 @@ def get_all_tags():
     all_tags = set()
     for node in dm.nodes_data:
         all_tags.update(node.get("tags", []))
-    return [""] + sorted(list(all_tags))
+    return sorted(list(all_tags))
+
+
+def get_all_tenants():
+    """모든 노드의 테넌트 목록 반환"""
+    all_tenants = set()
+    for node in dm.nodes_data:
+        tenant = node.get("tenant", "미지정")
+        if tenant:
+            all_tenants.add(tenant)
+    return sorted(list(all_tenants))
 
 
 def refresh_nodes():
     """노드 목록 새로고침"""
     dm.load_nodes()
-    return get_nodes_dataframe(), get_all_tags()
+    return get_nodes_dataframe(), get_all_tags(), get_all_tenants()
