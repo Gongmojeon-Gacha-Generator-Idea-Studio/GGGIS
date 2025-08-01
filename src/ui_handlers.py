@@ -27,6 +27,26 @@ def refresh_and_reset():
         "",
         "",
         "",  # 생성일시 초기화 추가
+        "",  # 아이디어 생성 상태 초기화 추가
+    )
+
+
+def refresh_and_reset_with_node_status():
+    """아이디어 목록 새로고침하고 노드 생성 상태까지 모든 상태 초기화"""
+    updated_df = refresh_ideas()
+    return (
+        updated_df,
+        gr.update(visible=False),  # 삭제 버튼 숨기기
+        gr.update(visible=False, value=""),  # 삭제 상태 숨기기
+        "아이디어를 선택해주세요.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",  # 생성일시 초기화 추가
+        "",  # 아이디어 생성 상태 초기화 추가
+        "",  # 노드 생성 상태 초기화 추가
     )
 
 
