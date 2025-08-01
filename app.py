@@ -14,10 +14,10 @@ from src.ui_handlers import (
 initialize_data()
 
 # Gradio 인터페이스 구성
-with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
 
     # 헤더
-    gr.Markdown("# 🔗 노드폴리오")
+    gr.Markdown("# 🔗 GGG Idea Studio")
     gr.Markdown("---")
 
     # 탭 구성
