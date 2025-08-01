@@ -60,7 +60,6 @@ def generate_idea_with_chatgpt(
         generated_idea["created_date"] = current_time.strftime("%Y-%m-%d")
         generated_idea["created_time"] = current_time.strftime("%H:%M:%S")
 
-        # 생성된 아이디어를 ideas_data에 저장
         print(f"[DEBUG] 아이디어 생성 완료: {generated_idea.get('title', 'No Title')}")
         print(f"[DEBUG] 생성 시각: {generated_idea['created_at']}")
         print(f"[DEBUG] 저장 전 ideas_data 길이: {len(dm.ideas_data)}")
