@@ -91,7 +91,6 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 interactive=False,
                 wrap=False,
                 elem_id="idea_nodes_table",
-                height=300,
             )
 
             # 아이디어 생성 섹션
