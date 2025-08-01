@@ -35,12 +35,19 @@ class OpenAIClient:
                 messages=[
                     {
                         "role": "system",
-                        "content": "당신은 창의적인 아이디어 생성 전문가입니다. 주어진 정보를 바탕으로 혁신적이고 실현 가능한 아이디어를 제안해주세요.",
+                        "content": """
+                            당신은 아이디에이션 전문가이자 크리에이티브 컨설턴트입니다.  입력으로 주어지는 다음 네 가지 요소를 결합해, 구체적이고 실행 가능한 혁신 아이디어를 제안해야 합니다.
+
+                            1. 도메인(Domain): 아이디에이션의 출발점이 되는 분야 (예: 농업, 의료, 법, 임업 등)
+                            2. 컨텍스트(Context): 해당 과제를 수행해야 하는 이유나 배경 설명 (예: 공모전 주제, 주최기관의 목표, 시장 동향)
+                            3. 이그나이터(Igniter): 아이디어의 핵심 방향성을 결정하는 키워드나 질문 (예: 지속가능성 극대화, 데이터 민주화, 사용자 참여 강화 등)
+                            4. 노드(Nodes): 사용자의 경험, 프로젝트 사례, 기술 스택 등 Connecting the Dots를 위한 자산 컬렉션
+                        """,
                     },
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
-                max_tokens=1000,
+                max_tokens=1500,
             )
 
             generated_text = response.choices[0].message.content
@@ -78,16 +85,23 @@ class OpenAIClient:
     def _create_prompt(self, contest_info: Dict[str, str], nodes_summary: str) -> str:
         """ChatGPT용 프롬프트 구성"""
         return f"""
-                다음 공모전 정보와 기존 프로젝트 경험을 바탕으로 새로운 아이디어를 제안해주세요.
+                다음 입력값을 참고해서 가장 최고의 아이디어를 **1가지** 제안해주세요.  
+                각 아이디어는 도메인 중심으로 컨텍스트·이그나이터·노드를 결합하여 작성합니다.
 
-                【공모전 정보】
+                【타겟 공모전 정보】
                 - 공모전 제목: {contest_info.get('title', '')}
-                - 주제: {contest_info.get('theme', '')}
-                - 상세 설명: {contest_info.get('description', '')}
-                - 맥락: {contest_info.get('context', '')}
+                - 도메인: {contest_info.get('theme', '')}
+                - 컨텍스트: {contest_info.get('description', '')}
+                - 이그나이터: {contest_info.get('context', '')}
+                
+                【connecting the dots을 위한 노드 정보】
+                - 노드: {nodes_summary}
 
-                【기존 프로젝트 경험】
-                {nodes_summary}
+                예시)  
+                - 도메인: 스마트 팜  
+                - 컨텍스트: 농림부 주최 ‘친환경 스마트 농업 공모전’, 저탄소 배출 우수사례 발굴  
+                - 이그나이터: “AI로 토양 건강 실시간 모니터링”  
+                - 노드: OpenCV 기반 이미지 분석, AWS RDS 대시보드 개발 경험, IoT 센서 네트워크 구축 경험
 
                 아래 형식에 맞춰 응답해주세요:
 
