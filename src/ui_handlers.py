@@ -11,12 +11,8 @@ from src.node_functions import (
     get_node_details_by_index,
     update_node,
     delete_node,
+    refresh_nodes,
 )
-
-
-def clear_idea_generation_fields():
-    """AI 아이디어 생성 탭 클릭시 모든 입력 필드 초기화"""
-    return "", "", "", "", ""
 
 
 def refresh_and_reset():
@@ -33,27 +29,51 @@ def refresh_and_reset():
         "",
         "",
         "",  # 생성일시 초기화 추가
+        "",  # 사용된 노드 초기화
+        "",  # 사용된 필터 초기화
+        "",  # 근거 초기화
         "",  # 아이디어 생성 상태 초기화 추가
         "",  # 검색 필드 초기화 추가
     )
 
 
-def refresh_and_reset_with_node_status():
-    """아이디어 목록 새로고침하고 노드 생성 상태까지 모든 상태 초기화"""
-    updated_df = refresh_ideas()
+def filter_ideas(search_text):
+    """아이디어 검색 (공모전 제목 또는 아이디어 제목에서 검색)"""
+    df = get_ideas_dataframe(search_text)
+    return gr.update(value=df)
+
+
+def refresh_and_clear_status():
+    """내 노드 확인하기 탭 클릭시 자동 새로고침 및 상태 초기화"""
+    df, tags, tenants = refresh_nodes()
     return (
-        updated_df,
+        df,
+        "",  # 검색 입력 초기화
+        gr.update(choices=tenants, value=[]),  # 테넌트 필터 업데이트
+        gr.update(choices=tags, value=[]),  # 태그 필터 업데이트
+        "",  # 아이디어 생성 상태 초기화
+        "",  # 노드 생성 상태 초기화
+        "노드를 선택해주세요.",  # 노드 제목 초기화
+        "",  # 노드 설명 초기화
+        "",  # 노드 테넌트 초기화
+        "",  # 노드 태그 초기화
+        "",  # 노드 생성일시 초기화
+        -1,  # 노드 인덱스 초기화
+        gr.update(visible=False),  # 편집 버튼 숨기기
         gr.update(visible=False),  # 삭제 버튼 숨기기
-        gr.update(visible=False, value=""),  # 삭제 상태 숨기기
-        "아이디어를 선택해주세요.",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",  # 생성일시 초기화 추가
-        "",  # 아이디어 생성 상태 초기화 추가
-        "",  # 노드 생성 상태 초기화 추가
+        gr.update(visible=False, value=""),  # 액션 상태 숨기기
+    )
+
+
+def refresh_idea_nodes():
+    """AI 아이디어 생성 탭의 노드 필터 초기화"""
+    df, tags, tenants = refresh_nodes()
+    return (
+        df,  # idea_nodes_dataframe
+        "",  # idea_node_search_input 초기화
+        gr.update(choices=tenants, value=[]),  # idea_tenant_filter 업데이트
+        gr.update(choices=tags, value=[]),  # idea_tag_filter 업데이트
+        "",  # create_status 초기화
     )
 
 
@@ -73,6 +93,9 @@ def handle_idea_selection(evt: gr.SelectData):
                 "",
                 "",
                 "",  # 생성일시 추가
+                "",  # 사용된 노드
+                "",  # 사용된 필터
+                "",  # 근거
                 -1,
                 gr.update(visible=False),
                 gr.update(visible=False, value=""),
@@ -94,6 +117,9 @@ def handle_idea_selection(evt: gr.SelectData):
                 "",
                 "",
                 "",  # 생성일시 추가
+                "",  # 사용된 노드
+                "",  # 사용된 필터
+                "",  # 근거
                 -1,
                 gr.update(visible=False),
                 gr.update(visible=False, value=""),
@@ -105,7 +131,7 @@ def handle_idea_selection(evt: gr.SelectData):
 
         idea_details = get_idea_details_by_index(original_index)
         # 아이디어 선택시 삭제 버튼 표시
-        # idea_details는 (title, contest_details, problem, solution, implementation, expected_effect, created_at) 순서
+        # idea_details는 (title, contest_details, problem, solution, implementation, expected_effect, created_at, nodes_info, filters_info, rationale) 순서
         return (
             idea_details[0],  # title -> selected_title
             idea_details[1],  # contest_details -> contest_info_display
@@ -114,6 +140,9 @@ def handle_idea_selection(evt: gr.SelectData):
             idea_details[4],  # implementation -> implementation_display
             idea_details[5],  # expected_effect -> expected_effect_display
             idea_details[6],  # created_at -> created_at_display
+            idea_details[7],  # nodes_info -> used_nodes_display
+            idea_details[8],  # filters_info -> used_filters_display
+            idea_details[9],  # rationale -> rationale_display
             original_index,  # selected_idea_index
             gr.update(visible=True),  # delete_idea_btn
             gr.update(visible=False, value=""),  # delete_status
@@ -127,6 +156,9 @@ def handle_idea_selection(evt: gr.SelectData):
         "",
         "",
         "",  # 생성일시 추가
+        "",  # 사용된 노드
+        "",  # 사용된 필터
+        "",  # 근거
         -1,
         gr.update(visible=False),
         gr.update(visible=False, value=""),
@@ -147,6 +179,9 @@ def handle_delete_idea(selected_index):
             "",
             "",
             "",  # 생성일시 추가
+            "",  # 사용된 노드
+            "",  # 사용된 필터
+            "",  # 근거
         )
 
     try:
@@ -162,6 +197,9 @@ def handle_delete_idea(selected_index):
             "",
             "",
             "",  # 생성일시 추가
+            "",  # 사용된 노드
+            "",  # 사용된 필터
+            "",  # 근거
         )
     except Exception as e:
         return (
@@ -175,6 +213,9 @@ def handle_delete_idea(selected_index):
             "",
             "",
             "",  # 생성일시 추가
+            "",  # 사용된 노드
+            "",  # 사용된 필터
+            "",  # 근거
         )
 
 

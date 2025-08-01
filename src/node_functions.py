@@ -4,40 +4,6 @@ import src.data_manager as dm
 from datetime import datetime
 
 
-def upload_portfolio_files(files):
-    """포트폴리오 파일 업로드 처리"""
-    if not files:
-        return "파일을 선택해주세요.", ""
-
-    uploaded_files = []
-    for file in files:
-        if file:
-            uploaded_files.append(f"📄 {file.name}")
-
-    files_display = "\n".join(uploaded_files)
-    return f"업로드된 파일:\n{files_display}", files_display
-
-
-def process_uploaded_files(files_display):
-    """업로드된 파일들을 AI로 분석하여 노드 생성"""
-    if not files_display:
-        return "업로드된 파일이 없습니다."
-
-    # TODO: 실제 AI 분석 로직 구현
-    sample_node = {
-        "title": "AI 분석된 프로젝트",
-        "description": "업로드된 파일에서 분석된 솔루션과 핵심 기능들을 포함한 상세 설명",
-        "tenant": "AI 분석",
-        "tags": ["AI", "데이터분석", "웹개발"],
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    dm.nodes_data.append(sample_node)
-    dm.save_nodes()
-
-    return "파일 분석이 완료되어 노드가 생성되었습니다!"
-
-
 def add_keyword(keyword, current_tags):
     """키워드 추가 (콤마로 구분된 여러 키워드 지원)"""
     if not keyword:

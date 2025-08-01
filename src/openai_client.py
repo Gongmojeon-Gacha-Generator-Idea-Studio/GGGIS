@@ -31,7 +31,7 @@ class OpenAIClient:
 
             # OpenAI GPT 호출
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # 또는 "gpt-4", "gpt-3.5-turbo"
+                model="gpt-4o",  # 또는 "gpt-4", "gpt-3.5-turbo"
                 messages=[
                     {
                         "role": "system",
@@ -47,7 +47,7 @@ class OpenAIClient:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
-                max_tokens=10,
+                max_tokens=5000,
             )
 
             generated_text = response.choices[0].message.content
@@ -64,6 +64,7 @@ class OpenAIClient:
                 "solution": "",
                 "implementation": "",
                 "expected_effect": "",
+                "rationale": "",
             }
 
     def _format_nodes_for_prompt(self, nodes_data: List[Dict[str, Any]]) -> str:
@@ -76,7 +77,8 @@ class OpenAIClient:
                 f"""
                 프로젝트 {i}:
                 - 제목: {node.get('title', '제목 없음')}
-                - 솔루션: {node.get('solution', '솔루션 없음')}
+                - 설명: {node.get('description', '설명 없음')}
+                - 테넌트: {node.get('tenant', '미지정')}
                 - 태그: {', '.join(node.get('tags', []))}
                 """
             )
@@ -110,7 +112,8 @@ class OpenAIClient:
                 문제의식: [해결하고자 하는 문제]  
                 솔루션: [구체적인 해결 방안]  
                 구현방안: [기술적 구현 또는 실행 계획]  
-                기대효과: [예상 성과 또는 효과]
+                기대효과: [예상 성과 또는 효과]  
+                근거: [위의 공모전 정보와 노드들이 어떻게 연결되어 이 아이디어가 도출되었는지, connecting the dots 관점에서 상세히 설명]
             """
 
     def _parse_generated_idea(
@@ -125,41 +128,102 @@ class OpenAIClient:
             "solution": "",
             "implementation": "",
             "expected_effect": "",
+            "rationale": "",
             "contest_info": contest_info,
             "raw_response": generated_text,
         }
 
         try:
+            # 더 강건한 파싱을 위한 키워드 매핑
+            keyword_mappings = {
+                "제목": "title",
+                "개요": "overview",
+                "문제의식": "problem",
+                "솔루션": "solution",
+                "구현방안": "implementation",
+                "기대효과": "expected_effect",
+                "근거": "rationale",
+            }
+
             lines = generated_text.split("\n")
             current_key = None
+
             for line in lines:
                 line = line.strip()
-                if line.startswith("제목:"):
-                    current_key = "title"
-                    idea[current_key] = line.replace("제목:", "").strip()
-                elif line.startswith("개요:"):
-                    current_key = "overview"
-                    idea[current_key] = line.replace("개요:", "").strip()
-                elif line.startswith("문제의식:"):
-                    current_key = "problem"
-                    idea[current_key] = line.replace("문제의식:", "").strip()
-                elif line.startswith("솔루션:"):
-                    current_key = "solution"
-                    idea[current_key] = line.replace("솔루션:", "").strip()
-                elif line.startswith("구현방안:"):
-                    current_key = "implementation"
-                    idea[current_key] = line.replace("구현방안:", "").strip()
-                elif line.startswith("기대효과:"):
-                    current_key = "expected_effect"
-                    idea[current_key] = line.replace("기대효과:", "").strip()
-                elif line and current_key:
-                    idea[current_key] += " " + line
+                if not line:  # 빈 줄 건너뛰기
+                    continue
+
+                # 키워드 검색 (콜론 포함)
+                found_key = False
+                for keyword, key in keyword_mappings.items():
+                    if (
+                        line.startswith(f"{keyword}:")
+                        or line.startswith(f"**{keyword}:**")
+                        or line.startswith(f"#{keyword}")
+                    ):
+                        current_key = key
+                        # 콜론 이후 내용 추출
+                        content = line.split(":", 1)[1].strip() if ":" in line else ""
+                        idea[current_key] = content
+                        found_key = True
+                        break
+
+                # 키워드가 발견되지 않았고 현재 키가 있으면 내용 추가
+                if not found_key and current_key and line:
+                    if idea[current_key]:
+                        idea[current_key] += " " + line
+                    else:
+                        idea[current_key] = line
+
         except Exception as e:
             print(f"[파싱오류] {e}")
+            print(f"[원본응답] {generated_text}")
             idea["title"] = "파싱 실패"
-            idea["overview"] = "결과 파싱에 실패했습니다."
+            idea["overview"] = f"결과 파싱에 실패했습니다. 오류: {str(e)}"
+
+        # 파싱 후 빈 필드가 있는지 확인 및 디버깅
+        empty_fields = [
+            key
+            for key, value in idea.items()
+            if key not in ["contest_info", "raw_response", "ai_name"] and not value
+        ]
+        if empty_fields:
+            print(f"[경고] 빈 필드 발견: {empty_fields}")
+            print(f"[원본응답 일부] {generated_text[:500]}...")
+
+        # 최소한의 제목은 확보
+        if not idea.get("title"):
+            idea["title"] = "제목 없음"
+
+        # 구현방안 필드 가독성 개선 (항목별 개행 추가)
+        if idea.get("implementation"):
+            idea["implementation"] = format_implementation_text(idea["implementation"])
 
         return idea
+
+
+def format_implementation_text(text: str) -> str:
+    """구현방안 텍스트의 가독성을 개선하여 각 항목별로 개행 추가"""
+    if not text:
+        return text
+
+    # 숫자로 시작하는 항목들을 찾아서 개행 추가
+    import re
+
+    # "1. ", "2. " 등의 패턴 앞에 개행 추가 (첫 번째 항목 제외)
+    formatted_text = re.sub(r"(\d+\.\s)", r"\n\1", text.strip())
+
+    # 처음에 개행이 추가된 경우 제거
+    if formatted_text.startswith("\n"):
+        formatted_text = formatted_text[1:]
+
+    # "- " 로 시작하는 항목들도 처리
+    formatted_text = re.sub(r"([^.\n])\s*(-\s)", r"\1\n\2", formatted_text)
+
+    # "• " 로 시작하는 항목들도 처리
+    formatted_text = re.sub(r"([^.\n])\s*(•\s)", r"\1\n\2", formatted_text)
+
+    return formatted_text
 
 
 # 사용 예시

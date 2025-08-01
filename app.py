@@ -1,17 +1,26 @@
 import gradio as gr
 from src.data_manager import initialize_data
-import src.data_manager as dm
-from src.node_functions import *
-from src.idea_functions import *
+from src.node_functions import (
+    get_nodes_dataframe,
+    add_keyword,
+    create_node,
+    filter_nodes_multi,
+)
+from src.idea_functions import (
+    get_ideas_dataframe,
+    generate_idea_with_chatgpt,
+    generate_idea_with_gemini,
+)
 from src.ui_handlers import (
-    clear_idea_generation_fields,
     refresh_and_reset,
-    refresh_and_reset_with_node_status,
     handle_idea_selection,
     handle_delete_idea,
     handle_node_selection,
     handle_edit_node,
     handle_delete_node,
+    filter_ideas,
+    refresh_and_clear_status,
+    refresh_idea_nodes,
 )
 
 # 앱 시작 시 데이터 초기화
@@ -50,6 +59,41 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 placeholder="아이디에이션의 방향성을 결정하는 핵심 포인트를 입력하세요 (선택사항)",
             )
 
+            # 노드 연결 섹션
+            gr.Markdown("#### 🔗 노드 연결")
+            gr.Markdown("*아이디어 생성에 사용할 노드들을 필터링하여 선택하세요*")
+
+            # 노드 필터링 옵션들
+            with gr.Row():
+                idea_node_search_input = gr.Textbox(
+                    label="🔍 노드 이름 검색",
+                    placeholder="검색할 노드 이름을 입력하세요...",
+                    scale=2,
+                )
+
+            with gr.Row():
+                idea_tenant_filter = gr.Dropdown(
+                    label="🏢 테넌트 필터 (다중선택)",
+                    choices=[],  # 초기에는 빈 리스트
+                    multiselect=True,
+                    scale=1,
+                )
+                idea_tag_filter = gr.Dropdown(
+                    label="🏷️ 태그 필터 (다중선택)",
+                    choices=[],  # 초기에는 빈 리스트
+                    multiselect=True,
+                    scale=1,
+                )
+
+            idea_nodes_dataframe = gr.Dataframe(
+                value=get_nodes_dataframe(),
+                headers=["생성일자", "노드 이름", "테넌트", "설명", "태그"],
+                interactive=False,
+                wrap=False,
+                elem_id="idea_nodes_table",
+                height=300,
+            )
+
             # 아이디어 생성 섹션
             gr.Markdown("#### 🤖 아이디어 생성하기")
             with gr.Row():
@@ -66,6 +110,23 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
             idea_generation_status = gr.Textbox(label="생성 상태", interactive=False)
 
             # 이벤트 연결
+
+            # 노드 필터링 이벤트들
+            for filter_component in [
+                idea_node_search_input,
+                idea_tenant_filter,
+                idea_tag_filter,
+            ]:
+                filter_component.change(
+                    filter_nodes_multi,
+                    inputs=[
+                        idea_node_search_input,
+                        idea_tenant_filter,
+                        idea_tag_filter,
+                    ],
+                    outputs=[idea_nodes_dataframe],
+                )
+
             chatgpt_btn.click(
                 generate_idea_with_chatgpt,
                 inputs=[
@@ -73,6 +134,9 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     contest_theme,
                     contest_description,
                     contest_context,
+                    idea_node_search_input,
+                    idea_tenant_filter,
+                    idea_tag_filter,
                 ],
                 outputs=[
                     idea_generation_status,
@@ -90,6 +154,9 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     contest_theme,
                     contest_description,
                     contest_context,
+                    idea_node_search_input,
+                    idea_tenant_filter,
+                    idea_tag_filter,
                 ],
                 outputs=[
                     idea_generation_status,
@@ -154,6 +221,19 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 )
                 created_at_display = gr.Textbox(label="생성일시", interactive=False)
 
+            with gr.Accordion("🔗 사용된 노드 및 필터 정보", open=False):
+                used_nodes_display = gr.Textbox(
+                    label="사용된 노드", lines=5, interactive=False
+                )
+                used_filters_display = gr.Textbox(
+                    label="사용된 필터", lines=5, interactive=False
+                )
+                rationale_display = gr.Textbox(
+                    label="아이디어 생성 근거 (Connecting the Dots)",
+                    lines=8,
+                    interactive=False,
+                )
+
             # 삭제 관련 UI
             selected_idea_index = gr.State(-1)  # 선택된 아이디어 인덱스
 
@@ -184,6 +264,9 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     implementation_display,
                     expected_effect_display,
                     created_at_display,
+                    used_nodes_display,
+                    used_filters_display,
+                    rationale_display,
                     selected_idea_index,
                     delete_idea_btn,
                     delete_status,
@@ -204,6 +287,9 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     implementation_display,
                     expected_effect_display,
                     created_at_display,
+                    used_nodes_display,
+                    used_filters_display,
+                    rationale_display,
                 ],
             )
 
@@ -221,40 +307,12 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     implementation_display,
                     expected_effect_display,
                     created_at_display,
+                    used_nodes_display,
+                    used_filters_display,
+                    rationale_display,
                     idea_generation_status,  # 아이디어 생성 상태 초기화
                     idea_search_input,  # 검색 필드 초기화
                 ],
-            )
-
-        # 1. 포폴 업로드 탭
-        with gr.Tab("📁 포폴업로드", visible=False) as portfolio_upload_tab:
-            gr.Markdown(
-                "### 포트폴리오 파일을 업로드하면 AI가 분석하여 노드를 자동 생성합니다"
-            )
-
-            file_upload = gr.Files(
-                label="포트폴리오 파일 업로드 (PDF, Word)",
-                file_count="multiple",
-                file_types=[".pdf", ".doc", ".docx"],
-            )
-
-            upload_status = gr.Textbox(label="업로드 상태", interactive=False)
-
-            with gr.Row():
-                upload_btn = gr.Button("📤 파일 업로드", variant="secondary")
-                process_btn = gr.Button("🤖 AI 분석 시작", variant="primary")
-
-            process_status = gr.Textbox(label="분석 결과", interactive=False)
-
-            # 이벤트 연결
-            upload_btn.click(
-                upload_portfolio_files,
-                inputs=[file_upload],
-                outputs=[upload_status, gr.State()],
-            )
-
-            process_btn.click(
-                process_uploaded_files, inputs=[upload_status], outputs=[process_status]
             )
 
         # 2. 노드 입력하기 탭
@@ -276,7 +334,6 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     placeholder="이 노드가 속할 그룹을 입력하세요 (예: 국민대, SuperbAI)",
                 )
 
-                gr.Markdown("#### 4. 노드에 대한 키워드를 입력해주세요")
                 with gr.Row():
                     keyword_input = gr.Textbox(
                         label="키워드",
@@ -453,26 +510,6 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
             )
 
             # 내 노드 확인하기 탭 클릭시 자동 새로고침 및 상태 초기화
-            def refresh_and_clear_status():
-                df, tags, tenants = refresh_nodes()
-                return (
-                    df,
-                    "",  # 검색 입력 초기화
-                    gr.update(choices=tenants, value=[]),  # 테넌트 필터 업데이트
-                    gr.update(choices=tags, value=[]),  # 태그 필터 업데이트
-                    "",  # 아이디어 생성 상태 초기화
-                    "",  # 노드 생성 상태 초기화
-                    "노드를 선택해주세요.",  # 노드 제목 초기화
-                    "",  # 노드 설명 초기화
-                    "",  # 노드 테넌트 초기화
-                    "",  # 노드 태그 초기화
-                    "",  # 노드 생성일시 초기화
-                    -1,  # 노드 인덱스 초기화
-                    gr.update(visible=False),  # 편집 버튼 숨기기
-                    gr.update(visible=False),  # 삭제 버튼 숨기기
-                    gr.update(visible=False, value=""),  # 액션 상태 숨기기
-                )
-
             node_view_tab.select(
                 fn=refresh_and_clear_status,
                 outputs=[
@@ -496,16 +533,16 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
 
         # 탭 간 상태 초기화 이벤트 (모든 컴포넌트 정의 후)
 
-    # AI 아이디어 생성 탭 클릭시 노드 생성 상태만 초기화
+    # AI 아이디어 생성 탭 클릭시 상태 초기화 및 노드 필터 초기화
     idea_generation_tab.select(
-        fn=lambda: "",
-        outputs=[create_status],
-    )
-
-    # 포폴 업로드 탭 클릭시 노드 생성 상태만 초기화
-    portfolio_upload_tab.select(
-        fn=lambda: "",
-        outputs=[create_status],
+        fn=refresh_idea_nodes,
+        outputs=[
+            idea_nodes_dataframe,
+            idea_node_search_input,
+            idea_tenant_filter,
+            idea_tag_filter,
+            create_status,
+        ],
     )
 
     # 노드 입력하기 탭 클릭시 아이디어 생성 상태, 노드 생성 상태만 초기화

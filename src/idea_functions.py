@@ -1,6 +1,7 @@
 import pandas as pd
 import src.data_manager as dm
 from src.openai_client import create_openai_client
+from src.node_functions import get_nodes_dataframe
 from datetime import datetime
 import pytz
 import gradio as gr
@@ -13,9 +14,15 @@ except ImportError:
 
 
 def generate_idea_with_chatgpt(
-    contest_title, contest_theme, contest_description, contest_context=""
+    contest_title,
+    contest_theme,
+    contest_description,
+    contest_context="",
+    search_text="",
+    selected_tenants=None,
+    selected_tags=None,
 ):
-    """ChatGPT를 이용해 아이디어 생성"""
+    """ChatGPT를 이용해 아이디어 생성 (필터링된 노드 사용)"""
     if not contest_title or not contest_theme or not contest_description:
         return (
             "공모전 제목, 주제, 설명을 모두 입력해주세요.",
@@ -37,8 +44,19 @@ def generate_idea_with_chatgpt(
             "context": contest_context,
         }
 
+        # 필터링된 노드들 가져오기
+        filtered_nodes = get_filtered_nodes(
+            search_text, selected_tenants, selected_tags
+        )
+
+        # 디버깅 정보 출력
+        print(f"[ChatGPT 디버그] 필터링된 노드 수: {len(filtered_nodes)}")
+        print(
+            f"[ChatGPT 디버그] 검색어: '{search_text}', 테넌트: {selected_tenants}, 태그: {selected_tags}"
+        )
+
         # 아이디어 생성
-        generated_idea = client.generate_idea(contest_info, dm.nodes_data)
+        generated_idea = client.generate_idea(contest_info, filtered_nodes)
 
         if "error" in generated_idea:
             return (
@@ -48,6 +66,16 @@ def generate_idea_with_chatgpt(
                 "",  # contest_description 비우기
                 "",  # contest_context 비우기
             )
+
+        # 사용된 노드와 필터 정보 추가
+        generated_idea["used_nodes"] = filtered_nodes
+        generated_idea["used_filters"] = {
+            "search_text": search_text or "",
+            "selected_tenants": selected_tenants or [],
+            "selected_tags": selected_tags or [],
+            "total_nodes_available": len(dm.nodes_data),
+            "filtered_nodes_count": len(filtered_nodes),
+        }
 
         # 생성일자 및 고유 ID 추가 (한국 시간)
         kst = pytz.timezone("Asia/Seoul")
@@ -257,6 +285,32 @@ def get_idea_details_by_index(selected_index):
 설명: {contest_info.get('description', 'N/A')}
 맥락: {contest_info.get('context', 'N/A')}"""
 
+        # 사용된 노드 정보 포맷팅
+        used_nodes = idea.get("used_nodes", [])
+        nodes_info = ""
+        if used_nodes:
+            nodes_list = []
+            for i, node in enumerate(used_nodes, 1):
+                nodes_list.append(
+                    f"{i}. {node.get('title', '제목 없음')} ({node.get('tenant', '미지정')})"
+                )
+            nodes_info = "\n".join(nodes_list)
+        else:
+            nodes_info = "사용된 노드 정보가 없습니다."
+
+        # 사용된 필터 정보 포맷팅
+        used_filters = idea.get("used_filters", {})
+        filters_info = f"""검색어: {used_filters.get('search_text', '없음')}
+선택된 테넌트: {', '.join(used_filters.get('selected_tenants', [])) or '없음'}
+선택된 태그: {', '.join(used_filters.get('selected_tags', [])) or '없음'}
+전체 노드 수: {used_filters.get('total_nodes_available', 0)}
+필터링된 노드 수: {used_filters.get('filtered_nodes_count', 0)}"""
+
+        # 아이디어 생성 근거 (기존 아이디어는 rationale 필드가 없을 수 있음)
+        rationale = idea.get("rationale", "")
+        if not rationale:
+            rationale = "이 아이디어는 이전 버전에서 생성되어 근거 정보가 없습니다."
+
         return (
             title,
             contest_details,
@@ -265,11 +319,25 @@ def get_idea_details_by_index(selected_index):
             implementation,
             expected_effect,
             created_at,  # 생성일시를 별도 반환
+            nodes_info,  # 사용된 노드 정보
+            filters_info,  # 사용된 필터 정보
+            rationale,  # 아이디어 생성 근거
         )
 
     except Exception as e:
         print(f"[ERROR] get_idea_details_by_index 에러: {e}")
-        return "아이디어 정보 로드 중 오류가 발생했습니다.", "", "", "", "", "", ""
+        return (
+            "아이디어 정보 로드 중 오류가 발생했습니다.",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
 
 
 def refresh_ideas():
@@ -301,9 +369,19 @@ def delete_idea(selected_index):
 
 # 추가: Gemini API 연동을 위한 준비 함수
 def generate_idea_with_gemini(
-    contest_title, contest_theme, contest_description, contest_context=""
+    contest_title,
+    contest_theme,
+    contest_description,
+    contest_context="",
+    search_text="",
+    selected_tenants=None,
+    selected_tags=None,
 ):
     """Gemini를 이용해 아이디어 생성 (향후 구현 예정)"""
+    # 필터링된 노드 정보도 로그로 출력 (디버깅용)
+    filtered_nodes = get_filtered_nodes(search_text, selected_tenants, selected_tags)
+    print(f"[Gemini 디버그] 필터링된 노드 수: {len(filtered_nodes)}")
+
     return (
         "Gemini API 연동은 아직 구현되지 않았습니다.",
         contest_title,  # 입력된 값 유지 (아직 구현되지 않았으므로)
@@ -311,3 +389,29 @@ def generate_idea_with_gemini(
         contest_description,  # 입력된 값 유지
         contest_context,  # 입력된 값 유지
     )
+
+
+def get_filtered_nodes(search_text="", selected_tenants=None, selected_tags=None):
+    """필터링 조건에 맞는 노드들을 반환"""
+    if not dm.nodes_data:
+        return []
+
+    filtered_nodes = []
+    for node in dm.nodes_data:
+        # 텍스트 검색 필터 (노드 이름에서 검색)
+        if search_text and search_text.lower() not in node["title"].lower():
+            continue
+
+        # 테넌트 필터
+        if selected_tenants and node.get("tenant", "미지정") not in selected_tenants:
+            continue
+
+        # 태그 필터 (선택된 태그 중 하나라도 포함되어야 함)
+        if selected_tags:
+            node_tags = node.get("tags", [])
+            if not any(tag in node_tags for tag in selected_tags):
+                continue
+
+        filtered_nodes.append(node)
+
+    return filtered_nodes
