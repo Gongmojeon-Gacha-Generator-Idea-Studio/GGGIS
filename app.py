@@ -20,7 +20,7 @@ initialize_data()
 with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as app:
     
     # 헤더
-    gr.Markdown("# 🔗 노드폴리오")
+    gr.Markdown("# 🔗 노드폴리오 테스트")
     gr.Markdown("---")
     
     # 탭 구성
