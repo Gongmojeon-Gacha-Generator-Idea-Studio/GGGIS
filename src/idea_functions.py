@@ -15,8 +15,14 @@ def generate_idea_with_chatgpt(
     contest_title, contest_theme, contest_description, contest_context=""
 ):
     """ChatGPT를 이용해 아이디어 생성"""
-    if not contest_title or not contest_theme:
-        return "공모전 제목과 주제를 입력해주세요."
+    if not contest_title or not contest_theme or not contest_description:
+        return (
+            "공모전 제목, 주제, 설명을 모두 입력해주세요.",
+            contest_title,  # 입력된 값 유지
+            contest_theme,  # 입력된 값 유지
+            contest_description,  # 입력된 값 유지
+            contest_context,  # 입력된 값 유지
+        )
 
     try:
         # OpenAI 클라이언트 생성 (.env에서 API 키 자동 로드)
@@ -34,7 +40,13 @@ def generate_idea_with_chatgpt(
         generated_idea = client.generate_idea(contest_info, dm.nodes_data)
 
         if "error" in generated_idea:
-            return generated_idea["error"]
+            return (
+                generated_idea["error"],
+                "",  # contest_title 비우기
+                "",  # contest_theme 비우기
+                "",  # contest_description 비우기
+                "",  # contest_context 비우기
+            )
 
         # 생성일자 및 고유 ID 추가 (한국 시간)
         kst = pytz.timezone("Asia/Seoul")
@@ -59,12 +71,30 @@ def generate_idea_with_chatgpt(
             print(f"[DEBUG] JSON 저장 완료")
         except Exception as save_error:
             print(f"[DEBUG] JSON 저장 실패: {save_error}")
-            return f"아이디어 생성은 완료되었지만 저장 중 오류가 발생했습니다: {save_error}"
+            return (
+                f"아이디어 생성은 완료되었지만 저장 중 오류가 발생했습니다: {save_error}",
+                "",  # contest_title 비우기
+                "",  # contest_theme 비우기
+                "",  # contest_description 비우기
+                "",  # contest_context 비우기
+            )
 
-        return f"아이디어 '{generated_idea['title']}'가 성공적으로 생성되었습니다!"
+        return (
+            f"아이디어 '{generated_idea['title']}'가 성공적으로 생성되었습니다!",
+            "",  # contest_title 비우기
+            "",  # contest_theme 비우기
+            "",  # contest_description 비우기
+            "",  # contest_context 비우기
+        )
 
     except Exception as e:
-        return f"아이디어 생성 중 오류가 발생했습니다: {str(e)}"
+        return (
+            f"아이디어 생성 중 오류가 발생했습니다: {str(e)}",
+            "",  # contest_title 비우기
+            "",  # contest_theme 비우기
+            "",  # contest_description 비우기
+            "",  # contest_context 비우기
+        )
 
 
 def get_ideas_dataframe():
@@ -268,4 +298,10 @@ def generate_idea_with_gemini(
     contest_title, contest_theme, contest_description, contest_context=""
 ):
     """Gemini를 이용해 아이디어 생성 (향후 구현 예정)"""
-    return "Gemini API 연동은 아직 구현되지 않았습니다."
+    return (
+        "Gemini API 연동은 아직 구현되지 않았습니다.",
+        contest_title,  # 입력된 값 유지 (아직 구현되지 않았으므로)
+        contest_theme,  # 입력된 값 유지
+        contest_description,  # 입력된 값 유지
+        contest_context,  # 입력된 값 유지
+    )

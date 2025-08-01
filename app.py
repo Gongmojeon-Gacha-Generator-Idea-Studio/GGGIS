@@ -6,6 +6,7 @@ from src.idea_functions import *
 from src.ui_handlers import (
     clear_idea_generation_fields,
     refresh_and_reset,
+    refresh_and_reset_with_node_status,
     handle_idea_selection,
     handle_delete_idea,
 )
@@ -70,7 +71,13 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     contest_description,
                     contest_context,
                 ],
-                outputs=[idea_generation_status],
+                outputs=[
+                    idea_generation_status,
+                    contest_title,
+                    contest_theme,
+                    contest_description,
+                    contest_context,
+                ],
             )
 
             gemini_btn.click(
@@ -81,20 +88,16 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     contest_description,
                     contest_context,
                 ],
-                outputs=[idea_generation_status],
-            )
-
-            # 탭 클릭시 입력 필드 초기화
-            idea_generation_tab.select(
-                fn=clear_idea_generation_fields,
                 outputs=[
+                    idea_generation_status,
                     contest_title,
                     contest_theme,
                     contest_description,
                     contest_context,
-                    idea_generation_status,
                 ],
             )
+
+            # 탭 클릭시 자동 초기화 기능 제거 (사용자 요청)
 
         # 5. 생성된 아이디어 확인하기 탭
         with gr.Tab("💭 생성된 아이디어 확인하기") as ideas_view_tab:
@@ -163,6 +166,7 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     implementation_display,
                     expected_effect_display,
                     created_at_display,
+                    idea_generation_status,  # 아이디어 생성 상태 초기화
                 ],
             )
 
@@ -199,7 +203,7 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 ],
             )
 
-            # 탭 클릭시 자동 새로고침
+            # 탭 클릭시 자동 새로고침 및 아이디어 생성 상태 초기화
             ideas_view_tab.select(
                 fn=refresh_and_reset,
                 outputs=[
@@ -213,11 +217,12 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     implementation_display,
                     expected_effect_display,
                     created_at_display,
+                    idea_generation_status,  # 아이디어 생성 상태 초기화
                 ],
             )
 
         # 1. 포폴 업로드 탭
-        with gr.Tab("📁 포폴업로드", visible=False):
+        with gr.Tab("📁 포폴업로드", visible=False) as portfolio_upload_tab:
             gr.Markdown(
                 "### 포트폴리오 파일을 업로드하면 AI가 분석하여 노드를 자동 생성합니다"
             )
@@ -248,7 +253,7 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
             )
 
         # 2. 노드 입력하기 탭
-        with gr.Tab("✏️ 노드 입력하기"):
+        with gr.Tab("✏️ 노드 입력하기") as node_input_tab:
             gr.Markdown("### 노드를 생성하세요")
 
             with gr.Column():
@@ -261,12 +266,18 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     placeholder="노드의 핵심 기능과 사용된 기술을 포함하여 자세히 설명해주세요",
                 )
 
-                gr.Markdown("#### 3. 노드에 대한 키워드를 입력해주세요")
+                gr.Markdown("#### 노드에 대한 키워드를 입력해주세요")
                 with gr.Row():
                     keyword_input = gr.Textbox(
-                        label="키워드", placeholder="키워드를 입력하세요"
+                        label="키워드",
+                        placeholder="키워드를 입력하세요 (예: 파이썬, 인공지능, AWS)",
+                        scale=2,
                     )
-                    add_keyword_btn = gr.Button("➕ 키워드 추가", variant="secondary")
+                    add_keyword_btn = gr.Button(
+                        "➕ 키워드 추가",
+                        variant="secondary",
+                        scale=1,
+                    )
 
                 tags_display = gr.Textbox(
                     label="추가된 키워드",
@@ -282,17 +293,31 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
             add_keyword_btn.click(
                 add_keyword,
                 inputs=[keyword_input, tags_display],
-                outputs=[tags_display, keyword_status],
+                outputs=[tags_display, keyword_input, keyword_status],
+            )
+
+            # 엔터키로도 키워드 추가 가능
+            keyword_input.submit(
+                add_keyword,
+                inputs=[keyword_input, tags_display],
+                outputs=[tags_display, keyword_input, keyword_status],
             )
 
             create_btn.click(
                 create_node,
                 inputs=[title_input, solution_input, tags_display],
-                outputs=[create_status],
+                outputs=[
+                    create_status,
+                    title_input,
+                    solution_input,
+                    keyword_input,
+                    tags_display,
+                    keyword_status,
+                ],
             )
 
         # 3. 내 노드 확인하기 탭
-        with gr.Tab("📋 내 노드 확인하기"):
+        with gr.Tab("📋 내 노드 확인하기") as node_view_tab:
             gr.Markdown("### 생성된 모든 노드를 확인하고 관리하세요")
 
             with gr.Row():
@@ -317,6 +342,30 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
             tag_filter.change(
                 filter_nodes, inputs=[tag_filter], outputs=[nodes_dataframe]
             )
+
+            # 노드 입력하기 탭 클릭시 아이디어 생성 상태 및 노드 생성 상태 초기화
+            node_input_tab.select(
+                fn=lambda: ("", ""),  # 아이디어 생성 상태와 노드 생성 상태 초기화
+                outputs=[idea_generation_status, create_status],
+            )
+
+            # 내 노드 확인하기 탭 클릭시 아이디어 생성 상태 및 노드 생성 상태 초기화
+            node_view_tab.select(
+                fn=lambda: ("", ""),  # 아이디어 생성 상태와 노드 생성 상태 초기화
+                outputs=[idea_generation_status, create_status],
+            )
+
+        # 탭 간 상태 초기화 이벤트 (모든 컴포넌트 정의 후)
+    # AI 아이디어 생성 탭 및 포폴 업로드 탭 클릭시 노드 생성 상태 초기화
+    idea_generation_tab.select(
+        fn=lambda: "",
+        outputs=[create_status],
+    )
+
+    portfolio_upload_tab.select(
+        fn=lambda: "",
+        outputs=[create_status],
+    )
 
 # 앱 실행
 if __name__ == "__main__":
