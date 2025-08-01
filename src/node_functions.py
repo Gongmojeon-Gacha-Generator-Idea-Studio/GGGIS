@@ -87,10 +87,6 @@ def add_keyword(keyword, current_tags):
 
 def create_node(title, description, tenant, tags):
     """사용자 입력으로 새 노드 생성"""
-    print(
-        f"[DEBUG] create_node 호출됨 - title: {title}, description 길이: {len(description) if description else 0}, tenant: {tenant}, tags: {tags}"
-    )
-
     if not title or not description:
         return (
             "❌ 프로젝트 제목과 설명을 모두 입력해주세요.",
@@ -129,8 +125,6 @@ def create_node(title, description, tenant, tags):
             "",
         )
 
-    print(f"[DEBUG] 태그 리스트 변환 완료: {tags_list}")
-
     new_node = {
         "title": title,
         "description": description,
@@ -139,11 +133,7 @@ def create_node(title, description, tenant, tags):
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    print(f"[DEBUG] 새 노드 생성: {new_node}")
-    print(f"[DEBUG] 현재 nodes_data 길이: {len(dm.nodes_data)}")
-
     dm.nodes_data.append(new_node)
-    print(f"[DEBUG] 노드 추가 후 nodes_data 길이: {len(dm.nodes_data)}")
 
     dm.save_nodes()
 

@@ -11,20 +11,9 @@ def save_nodes():
     try:
         # data 디렉토리 생성
         os.makedirs("data", exist_ok=True)
-        print(f"[DEBUG] save_nodes 호출됨. 저장할 데이터 개수: {len(nodes_data)}")
 
         with open("data/nodes_data.json", "w", encoding="utf-8") as f:
             json.dump(nodes_data, f, ensure_ascii=False, indent=2)
-
-        print(f"[DEBUG] nodes_data.json 저장 완료")
-
-        # 저장 확인
-        if os.path.exists("data/nodes_data.json"):
-            with open("data/nodes_data.json", "r", encoding="utf-8") as f:
-                saved_data = json.load(f)
-                print(
-                    f"[DEBUG] 저장 확인 - 파일에 저장된 데이터 개수: {len(saved_data)}"
-                )
 
     except Exception as e:
         print(f"[ERROR] save_nodes 실패: {e}")
@@ -36,20 +25,9 @@ def save_ideas():
     try:
         # data 디렉토리 생성
         os.makedirs("data", exist_ok=True)
-        print(f"[DEBUG] save_ideas 호출됨. 저장할 데이터 개수: {len(ideas_data)}")
 
         with open("data/ideas_data.json", "w", encoding="utf-8") as f:
             json.dump(ideas_data, f, ensure_ascii=False, indent=2)
-
-        print(f"[DEBUG] ideas_data.json 저장 완료")
-
-        # 저장 확인
-        if os.path.exists("data/ideas_data.json"):
-            with open("data/ideas_data.json", "r", encoding="utf-8") as f:
-                saved_data = json.load(f)
-                print(
-                    f"[DEBUG] 저장 확인 - 파일에 저장된 데이터 개수: {len(saved_data)}"
-                )
 
     except Exception as e:
         print(f"[ERROR] save_ideas 실패: {e}")
@@ -65,9 +43,6 @@ def load_nodes():
                 nodes_data = json.load(f)
         except (json.JSONDecodeError, ValueError):
             nodes_data = []
-            print(
-                "data/nodes_data.json 파일이 손상되었거나 비어있습니다. 새로 시작합니다."
-            )
     else:
         nodes_data = []
 
@@ -81,9 +56,6 @@ def load_ideas():
                 ideas_data = json.load(f)
         except (json.JSONDecodeError, ValueError):
             ideas_data = []
-            print(
-                "data/ideas_data.json 파일이 손상되었거나 비어있습니다. 새로 시작합니다."
-            )
     else:
         ideas_data = []
 

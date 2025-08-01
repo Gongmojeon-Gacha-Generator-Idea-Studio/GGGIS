@@ -59,8 +59,6 @@ def refresh_and_reset_with_node_status():
 
 def handle_idea_selection(evt: gr.SelectData):
     """아이디어 선택 이벤트 처리"""
-    print(f"[DEBUG] SelectData evt.index: {evt.index}")
-    print(f"[DEBUG] SelectData evt.value: {evt.value}")
 
     if evt.index is not None and len(evt.index) >= 1:
         display_index = evt.index[0]  # 화면에 표시된 인덱스
@@ -182,8 +180,6 @@ def handle_delete_idea(selected_index):
 
 def handle_node_selection(evt: gr.SelectData):
     """노드 선택 이벤트 처리"""
-    print(f"[DEBUG] Node SelectData evt.index: {evt.index}")
-    print(f"[DEBUG] Node SelectData evt.value: {evt.value}")
 
     if evt.index is not None and len(evt.index) >= 1:
         display_index = evt.index[0]  # 화면에 표시된 인덱스

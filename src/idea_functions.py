@@ -60,18 +60,11 @@ def generate_idea_with_chatgpt(
         generated_idea["created_date"] = current_time.strftime("%Y-%m-%d")
         generated_idea["created_time"] = current_time.strftime("%H:%M:%S")
 
-        print(f"[DEBUG] 아이디어 생성 완료: {generated_idea.get('title', 'No Title')}")
-        print(f"[DEBUG] 생성 시각: {generated_idea['created_at']}")
-        print(f"[DEBUG] 저장 전 ideas_data 길이: {len(dm.ideas_data)}")
-
         dm.ideas_data.append(generated_idea)
-        print(f"[DEBUG] 저장 후 ideas_data 길이: {len(dm.ideas_data)}")
 
         try:
             dm.save_ideas()
-            print(f"[DEBUG] JSON 저장 완료")
         except Exception as save_error:
-            print(f"[DEBUG] JSON 저장 실패: {save_error}")
             return (
                 f"아이디어 생성은 완료되었지만 저장 중 오류가 발생했습니다: {save_error}",
                 "",  # contest_title 비우기
@@ -166,10 +159,6 @@ def filter_ideas(search_text):
 def get_idea_details(selection_data):
     """선택된 아이디어의 상세 정보 반환"""
     try:
-        # 디버깅: selection_data의 구조 확인
-        print(f"[DEBUG] selection_data 타입: {type(selection_data)}")
-        print(f"[DEBUG] selection_data 내용: {selection_data}")
-
         # selection_data가 None이거나 비어있는 경우
         if selection_data is None:
             return "아이디어를 선택해주세요.", "", "", "", "", "", ""
@@ -183,23 +172,16 @@ def get_idea_details(selection_data):
                 selection_data.index, (list, tuple)
             ):
                 selected_index = selection_data.index[0]  # 행 인덱스
-                print(f"[DEBUG] SelectData 객체에서 추출한 인덱스: {selected_index}")
-            else:
-                print(f"[DEBUG] SelectData 객체에서 index 속성을 찾을 수 없음")
 
         # hasattr로 index 속성 확인 (일반적인 경우)
         elif hasattr(selection_data, "index"):
             if isinstance(selection_data.index, (list, tuple)):
                 selected_index = selection_data.index[0]  # 행 인덱스
-                print(
-                    f"[DEBUG] index 속성(list/tuple)에서 추출한 인덱스: {selected_index}"
-                )
             elif (
                 hasattr(selection_data.index, "__len__")
                 and len(selection_data.index) > 0
             ):
                 selected_index = selection_data.index[0]
-                print(f"[DEBUG] index 속성(pandas)에서 추출한 인덱스: {selected_index}")
 
         # 딕셔너리 형태인 경우
         elif isinstance(selection_data, dict):
@@ -208,21 +190,16 @@ def get_idea_details(selection_data):
                     selected_index = selection_data["index"][0]
                 else:
                     selected_index = selection_data["index"]
-                print(f"[DEBUG] 딕셔너리에서 추출한 인덱스: {selected_index}")
 
         # 정수 값이 직접 전달된 경우
         elif isinstance(selection_data, (int, float)):
             selected_index = int(selection_data)
-            print(f"[DEBUG] 직접 전달된 인덱스: {selected_index}")
 
         # 인덱스를 찾지 못한 경우
         if selected_index is None:
-            print(f"[DEBUG] 인덱스를 찾을 수 없음")
             return "아이디어를 선택해주세요.", "", "", "", "", "", ""
 
     except Exception as e:
-        print(f"[DEBUG] get_idea_details 에러: {e}")
-        print(f"[DEBUG] selection_data: {selection_data}")
         return "아이디어 선택 중 오류가 발생했습니다.", "", "", "", "", "", ""
 
     if selected_index >= len(dm.ideas_data):
@@ -258,9 +235,6 @@ def get_idea_details(selection_data):
 def get_idea_details_by_index(selected_index):
     """인덱스를 직접 받아서 아이디어 상세 정보 반환"""
     try:
-        print(f"[DEBUG] get_idea_details_by_index 호출됨, 인덱스: {selected_index}")
-        print(f"[DEBUG] 현재 ideas_data 길이: {len(dm.ideas_data)}")
-
         if selected_index is None or selected_index < 0:
             return "올바르지 않은 인덱스입니다.", "", "", "", "", "", ""
 
@@ -268,7 +242,6 @@ def get_idea_details_by_index(selected_index):
             return "선택된 아이디어를 찾을 수 없습니다.", "", "", "", "", "", ""
 
         idea = dm.ideas_data[selected_index]
-        print(f"[DEBUG] 선택된 아이디어: {idea.get('title', 'No Title')}")
 
         title = idea.get("title", "제목 없음")
         problem = idea.get("problem", "문제의식 정보가 없습니다.")
