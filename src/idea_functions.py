@@ -1,6 +1,8 @@
 import pandas as pd
 import src.data_manager as dm
 from src.openai_client import create_openai_client
+from datetime import datetime
+import pytz
 
 try:
     from gradio import SelectData
@@ -34,8 +36,19 @@ def generate_idea_with_chatgpt(
         if "error" in generated_idea:
             return generated_idea["error"]
 
+        # 생성일자 및 고유 ID 추가 (한국 시간)
+        kst = pytz.timezone("Asia/Seoul")
+        current_time = datetime.now(kst)
+        generated_idea["id"] = current_time.strftime("%Y%m%d%H%M%S") + str(
+            len(dm.ideas_data)
+        )
+        generated_idea["created_at"] = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        generated_idea["created_date"] = current_time.strftime("%Y-%m-%d")
+        generated_idea["created_time"] = current_time.strftime("%H:%M:%S")
+
         # 생성된 아이디어를 ideas_data에 저장
         print(f"[DEBUG] 아이디어 생성 완료: {generated_idea.get('title', 'No Title')}")
+        print(f"[DEBUG] 생성 시각: {generated_idea['created_at']}")
         print(f"[DEBUG] 저장 전 ideas_data 길이: {len(dm.ideas_data)}")
 
         dm.ideas_data.append(generated_idea)
@@ -55,21 +68,36 @@ def generate_idea_with_chatgpt(
 
 
 def get_ideas_dataframe():
-    """생성된 아이디어들을 데이터프레임으로 변환"""
+    """생성된 아이디어들을 데이터프레임으로 변환 (최신순 정렬)"""
     if not dm.ideas_data:
-        return pd.DataFrame(columns=["AI 이름", "아이디어 제목", "아이디어 개요"])
+        return pd.DataFrame(
+            columns=["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"]
+        )
+
+    # 생성일시 기준으로 내림차순 정렬 (최신 아이디어가 위로)
+    sorted_ideas = sorted(
+        dm.ideas_data,
+        key=lambda x: x.get("created_at", "1900-01-01 00:00:00"),
+        reverse=True,
+    )
 
     df_data = []
-    for idea in dm.ideas_data:
+    for idx, idea in enumerate(sorted_ideas):
+        # 원본 배열에서의 실제 인덱스 찾기
+        original_index = dm.ideas_data.index(idea)
         df_data.append(
             {
-                "AI 이름": idea.get("ai_name", "Unknown"),
+                "생성일시": idea.get("created_at", "N/A"),
                 "아이디어 제목": idea.get("title", "제목 없음"),
                 "아이디어 개요": idea.get("overview", "개요 없음"),
+                "AI 이름": idea.get("ai_name", "Unknown"),
+                "_original_index": original_index,  # 숨겨진 원본 인덱스
             }
         )
 
-    return pd.DataFrame(df_data)
+    df = pd.DataFrame(df_data)
+    # _original_index 컬럼은 UI에서 보이지 않도록 처리
+    return df[["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"]]
 
 
 def get_idea_details(selection_data):
@@ -81,7 +109,7 @@ def get_idea_details(selection_data):
 
         # selection_data가 None이거나 비어있는 경우
         if selection_data is None:
-            return "아이디어를 선택해주세요.", "", "", "", "", ""
+            return "아이디어를 선택해주세요.", "", "", "", "", "", ""
 
         # Gradio dataframe.select()는 SelectData 객체를 전달함
         selected_index = None
@@ -127,15 +155,15 @@ def get_idea_details(selection_data):
         # 인덱스를 찾지 못한 경우
         if selected_index is None:
             print(f"[DEBUG] 인덱스를 찾을 수 없음")
-            return "아이디어를 선택해주세요.", "", "", "", "", ""
+            return "아이디어를 선택해주세요.", "", "", "", "", "", ""
 
     except Exception as e:
         print(f"[DEBUG] get_idea_details 에러: {e}")
         print(f"[DEBUG] selection_data: {selection_data}")
-        return "아이디어 선택 중 오류가 발생했습니다.", "", "", "", "", ""
+        return "아이디어 선택 중 오류가 발생했습니다.", "", "", "", "", "", ""
 
     if selected_index >= len(dm.ideas_data):
-        return "선택된 아이디어를 찾을 수 없습니다.", "", "", "", "", ""
+        return "선택된 아이디어를 찾을 수 없습니다.", "", "", "", "", "", ""
 
     idea = dm.ideas_data[selected_index]
 
@@ -145,14 +173,23 @@ def get_idea_details(selection_data):
     implementation = idea.get("implementation", "구현방안 정보가 없습니다.")
     expected_effect = idea.get("expected_effect", "기대효과 정보가 없습니다.")
 
-    # 공모전 정보
+    # 공모전 정보 및 생성일시
     contest_info = idea.get("contest_info", {})
+    created_at = idea.get("created_at", "N/A")
     contest_details = f"""공모전 제목: {contest_info.get('title', 'N/A')}
 주제: {contest_info.get('theme', 'N/A')}
 설명: {contest_info.get('description', 'N/A')}
 맥락: {contest_info.get('context', 'N/A')}"""
 
-    return title, contest_details, problem, solution, implementation, expected_effect
+    return (
+        title,
+        contest_details,
+        problem,
+        solution,
+        implementation,
+        expected_effect,
+        created_at,
+    )
 
 
 def get_idea_details_by_index(selected_index):
@@ -162,10 +199,10 @@ def get_idea_details_by_index(selected_index):
         print(f"[DEBUG] 현재 ideas_data 길이: {len(dm.ideas_data)}")
 
         if selected_index is None or selected_index < 0:
-            return "올바르지 않은 인덱스입니다.", "", "", "", "", ""
+            return "올바르지 않은 인덱스입니다.", "", "", "", "", "", ""
 
         if selected_index >= len(dm.ideas_data):
-            return "선택된 아이디어를 찾을 수 없습니다.", "", "", "", "", ""
+            return "선택된 아이디어를 찾을 수 없습니다.", "", "", "", "", "", ""
 
         idea = dm.ideas_data[selected_index]
         print(f"[DEBUG] 선택된 아이디어: {idea.get('title', 'No Title')}")
@@ -176,8 +213,9 @@ def get_idea_details_by_index(selected_index):
         implementation = idea.get("implementation", "구현방안 정보가 없습니다.")
         expected_effect = idea.get("expected_effect", "기대효과 정보가 없습니다.")
 
-        # 공모전 정보
+        # 공모전 정보 및 생성일시
         contest_info = idea.get("contest_info", {})
+        created_at = idea.get("created_at", "N/A")
         contest_details = f"""공모전 제목: {contest_info.get('title', 'N/A')}
 주제: {contest_info.get('theme', 'N/A')}
 설명: {contest_info.get('description', 'N/A')}
@@ -190,11 +228,12 @@ def get_idea_details_by_index(selected_index):
             solution,
             implementation,
             expected_effect,
+            created_at,  # 생성일시를 별도 반환
         )
 
     except Exception as e:
         print(f"[ERROR] get_idea_details_by_index 에러: {e}")
-        return "아이디어 정보 로드 중 오류가 발생했습니다.", "", "", "", "", ""
+        return "아이디어 정보 로드 중 오류가 발생했습니다.", "", "", "", "", "", ""
 
 
 def refresh_ideas():

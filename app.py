@@ -1,7 +1,14 @@
 import gradio as gr
 from src.data_manager import initialize_data
+import src.data_manager as dm
 from src.node_functions import *
 from src.idea_functions import *
+from src.ui_handlers import (
+    clear_idea_generation_fields,
+    refresh_and_reset,
+    handle_idea_selection,
+    handle_delete_idea,
+)
 
 # 앱 시작 시 데이터 초기화
 initialize_data()
@@ -17,7 +24,7 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
     with gr.Tabs():
 
         # 4. AI 아이디어 생성 탭
-        with gr.Tab("🚀 AI 아이디어 생성"):
+        with gr.Tab("🚀 AI 아이디어 생성") as idea_generation_tab:
             gr.Markdown("### AI 아이디어를 생성하세요")
 
             # 공모전 정보 섹션
@@ -25,17 +32,18 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
                 label="공모전 제목", placeholder="참가할 공모전 제목을 입력하세요"
             )
             contest_theme = gr.Textbox(
-                label="공모전 주제", placeholder="공모전의 주요 주제를 입력하세요"
+                label="공모전 주제 [Domain]",
+                placeholder="공모전의 주요 주제 혹은 공모전의 도메인을 입력하세요",
             )
             contest_description = gr.Textbox(
-                label="공모전 설명",
+                label="공모전 설명 [Context]",
                 lines=3,
-                placeholder="공모전에 대한 상세 설명을 입력하세요",
+                placeholder="공모전에 대한 상세 설명과 추가적인 맥락 정보를 입력하세요",
             )
             contest_context = gr.Textbox(
-                label="공모전 맥락 (선택사항)",
+                label="공모전 맥락 [Igniter] (선택사항)",
                 lines=2,
-                placeholder="공모전의 배경이나 추가적인 맥락 정보를 입력하세요 (선택사항)",
+                placeholder="아이디에이션의 방향성을 결정하는 핵심 포인트를 입력하세요 (선택사항)",
             )
 
             # 아이디어 생성 섹션
@@ -76,8 +84,20 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
                 outputs=[idea_generation_status],
             )
 
+            # 탭 클릭시 입력 필드 초기화
+            idea_generation_tab.select(
+                fn=clear_idea_generation_fields,
+                outputs=[
+                    contest_title,
+                    contest_theme,
+                    contest_description,
+                    contest_context,
+                    idea_generation_status,
+                ],
+            )
+
         # 5. 생성된 아이디어 확인하기 탭
-        with gr.Tab("💭 생성된 아이디어 확인하기"):
+        with gr.Tab("💭 생성된 아이디어 확인하기") as ideas_view_tab:
             gr.Markdown(
                 "### AI로 생성된 아이디어를 확인하고 상세 내용을 볼 수 있습니다"
             )
@@ -88,8 +108,8 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
             # 아이디어 목록
             ideas_dataframe = gr.Dataframe(
                 value=get_ideas_dataframe(),
-                headers=["AI 이름", "아이디어 제목", "아이디어 개요"],
-                interactive=True,
+                headers=["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"],
+                interactive=False,
                 elem_id="ideas_table",
             )
 
@@ -116,11 +136,38 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
                 expected_effect_display = gr.Textbox(
                     label="기대 효과", lines=3, interactive=False
                 )
+                created_at_display = gr.Textbox(label="생성일시", interactive=False)
+
+            # 삭제 관련 UI
+            selected_idea_index = gr.State(-1)  # 선택된 아이디어 인덱스
+
+            with gr.Row():
+                delete_idea_btn = gr.Button(
+                    "🗑️ 선택된 아이디어 삭제", variant="stop", visible=False
+                )
+                delete_status = gr.Textbox(
+                    label="", interactive=False, visible=False, show_label=False
+                )
 
             # 이벤트 연결
-            refresh_ideas_btn.click(refresh_ideas, outputs=[ideas_dataframe])
+            refresh_ideas_btn.click(
+                fn=refresh_and_reset,
+                outputs=[
+                    ideas_dataframe,
+                    delete_idea_btn,
+                    delete_status,
+                    selected_title,
+                    contest_info_display,
+                    problem_display,
+                    solution_display,
+                    implementation_display,
+                    expected_effect_display,
+                    created_at_display,
+                ],
+            )
 
-            @ideas_dataframe.select(
+            ideas_dataframe.select(
+                fn=handle_idea_selection,
                 outputs=[
                     selected_title,
                     contest_info_display,
@@ -128,14 +175,46 @@ with gr.Blocks(title="노드폴리오", theme=gr.themes.Soft()) as demo:
                     solution_display,
                     implementation_display,
                     expected_effect_display,
-                ]
+                    selected_idea_index,
+                    delete_idea_btn,
+                    delete_status,
+                    created_at_display,
+                ],
             )
-            def handle_idea_selection(evt: gr.SelectData):
-                print(f"[DEBUG] SelectData evt.index: {evt.index}")
-                print(f"[DEBUG] SelectData evt.value: {evt.value}")
-                if evt.index is not None and len(evt.index) >= 1:
-                    return get_idea_details_by_index(evt.index[0])
-                return "아이디어를 선택해주세요.", "", "", "", "", ""
+
+            delete_idea_btn.click(
+                fn=handle_delete_idea,
+                inputs=[selected_idea_index],
+                outputs=[
+                    delete_status,
+                    ideas_dataframe,
+                    delete_idea_btn,
+                    selected_title,
+                    contest_info_display,
+                    problem_display,
+                    solution_display,
+                    implementation_display,
+                    expected_effect_display,
+                    created_at_display,
+                ],
+            )
+
+            # 탭 클릭시 자동 새로고침
+            ideas_view_tab.select(
+                fn=refresh_and_reset,
+                outputs=[
+                    ideas_dataframe,
+                    delete_idea_btn,
+                    delete_status,
+                    selected_title,
+                    contest_info_display,
+                    problem_display,
+                    solution_display,
+                    implementation_display,
+                    expected_effect_display,
+                    created_at_display,
+                ],
+            )
 
         # 1. 포폴 업로드 탭
         with gr.Tab("📁 포폴업로드", visible=False):
