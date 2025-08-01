@@ -111,9 +111,9 @@ class OpenAIClient:
                 개요: [간단한 소개]  
                 문제의식: [해결하고자 하는 문제]  
                 솔루션: [구체적인 해결 방안]  
-                구현방안: [기술적 구현 또는 실행 계획]  
-                기대효과: [예상 성과 또는 효과]  
-                근거: [위의 공모전 정보와 노드들이 어떻게 연결되어 이 아이디어가 도출되었는지, connecting the dots 관점에서 상세히 설명]
+                구현방안: [기술적 구현 또는 실행 계획을 단계별로 나열 (1. 2. 3. 형태 또는 - 형태로)]  
+                기대효과: [예상 성과 또는 효과를 항목별로 나열 (- 형태로 작성)]  
+                근거: [위의 공모전 정보와 노드들이 어떻게 연결되어 이 아이디어가 도출되었는지를 connecting the dots 관점에서 논리적 단계별로 설명 (- 형태로 작성)]
             """
 
     def _parse_generated_idea(
@@ -195,35 +195,54 @@ class OpenAIClient:
         if not idea.get("title"):
             idea["title"] = "제목 없음"
 
-        # 구현방안 필드 가독성 개선 (항목별 개행 추가)
+        # 구현방안, 기대효과, 근거 필드 가독성 개선 (항목별 개행 추가)
         if idea.get("implementation"):
-            idea["implementation"] = format_implementation_text(idea["implementation"])
+            idea["implementation"] = format_list_text(idea["implementation"])
+        if idea.get("expected_effect"):
+            idea["expected_effect"] = format_list_text(idea["expected_effect"])
+        if idea.get("rationale"):
+            idea["rationale"] = format_list_text(idea["rationale"])
 
         return idea
 
 
-def format_implementation_text(text: str) -> str:
-    """구현방안 텍스트의 가독성을 개선하여 각 항목별로 개행 추가"""
+def format_list_text(text: str) -> str:
+    """텍스트의 가독성을 개선하여 각 항목별로 개행 추가"""
     if not text:
         return text
 
-    # 숫자로 시작하는 항목들을 찾아서 개행 추가
     import re
 
-    # "1. ", "2. " 등의 패턴 앞에 개행 추가 (첫 번째 항목 제외)
-    formatted_text = re.sub(r"(\d+\.\s)", r"\n\1", text.strip())
+    # 먼저 텍스트를 정리
+    text = text.strip()
+
+    # "- " 패턴이 있으면 우선 처리
+    if "- " in text and not text.startswith("- "):
+        # "- " 앞에 개행 추가 (첫 번째 항목 제외)
+        formatted_text = re.sub(r"([^.\n])\s*(-\s)", r"\1\n\2", text)
+    else:
+        # "- " 패턴이 없거나 이미 첫 번째가 "- "로 시작하면 숫자 패턴도 처리
+        formatted_text = text
+
+        # "1. ", "2. " 등의 패턴 앞에 개행 추가 (첫 번째 항목 제외)
+        formatted_text = re.sub(r"([^.\n])(\d+\.\s)", r"\1\n\2", formatted_text)
+
+        # "- " 로 시작하는 항목들 처리
+        formatted_text = re.sub(r"([^.\n])\s*(-\s)", r"\1\n\2", formatted_text)
+
+    # "• " 로 시작하는 항목들 처리
+    formatted_text = re.sub(r"([^.\n])\s*(•\s)", r"\1\n\2", formatted_text)
 
     # 처음에 개행이 추가된 경우 제거
     if formatted_text.startswith("\n"):
         formatted_text = formatted_text[1:]
 
-    # "- " 로 시작하는 항목들도 처리
-    formatted_text = re.sub(r"([^.\n])\s*(-\s)", r"\1\n\2", formatted_text)
-
-    # "• " 로 시작하는 항목들도 처리
-    formatted_text = re.sub(r"([^.\n])\s*(•\s)", r"\1\n\2", formatted_text)
-
     return formatted_text
+
+
+def format_implementation_text(text: str) -> str:
+    """구현방안 텍스트의 가독성을 개선하여 각 항목별로 개행 추가 (하위 호환성)"""
+    return format_list_text(text)
 
 
 # 사용 예시
