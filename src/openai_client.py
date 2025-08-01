@@ -1,10 +1,10 @@
 from openai import OpenAI
-import json
 import os
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 class OpenAIClient:
     def __init__(self, api_key: str = None):
@@ -15,10 +15,12 @@ class OpenAIClient:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OpenAI API key가 필요합니다.")
-        
+
         self.client = OpenAI(api_key=self.api_key)
 
-    def generate_idea(self, contest_info: Dict[str, str], nodes_data: List[Dict[str, Any]]) -> Dict[str, str]:
+    def generate_idea(
+        self, contest_info: Dict[str, str], nodes_data: List[Dict[str, Any]]
+    ) -> Dict[str, str]:
         """
         공모전 정보와 노드 데이터를 기반으로 아이디어 생성
         """
@@ -31,11 +33,14 @@ class OpenAIClient:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",  # 또는 "gpt-4", "gpt-3.5-turbo"
                 messages=[
-                    {"role": "system", "content": "당신은 창의적인 아이디어 생성 전문가입니다. 주어진 정보를 바탕으로 혁신적이고 실현 가능한 아이디어를 제안해주세요."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "당신은 창의적인 아이디어 생성 전문가입니다. 주어진 정보를 바탕으로 혁신적이고 실현 가능한 아이디어를 제안해주세요.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
-                max_tokens=1500
+                max_tokens=1000,
             )
 
             generated_text = response.choices[0].message.content
@@ -51,7 +56,7 @@ class OpenAIClient:
                 "problem": "",
                 "solution": "",
                 "implementation": "",
-                "expected_effect": ""
+                "expected_effect": "",
             }
 
     def _format_nodes_for_prompt(self, nodes_data: List[Dict[str, Any]]) -> str:
@@ -60,12 +65,14 @@ class OpenAIClient:
             return "기존 프로젝트 정보 없음."
         formatted = []
         for i, node in enumerate(nodes_data, 1):
-            formatted.append(f"""
-        프로젝트 {i}:
-        - 제목: {node.get('title', '제목 없음')}
-        - 솔루션: {node.get('solution', '솔루션 없음')}
-        - 태그: {', '.join(node.get('tags', []))}
-""")
+            formatted.append(
+                f"""
+                프로젝트 {i}:
+                - 제목: {node.get('title', '제목 없음')}
+                - 솔루션: {node.get('solution', '솔루션 없음')}
+                - 태그: {', '.join(node.get('tags', []))}
+                """
+            )
         return "\n".join(formatted)
 
     def _create_prompt(self, contest_info: Dict[str, str], nodes_summary: str) -> str:
@@ -92,7 +99,9 @@ class OpenAIClient:
                 기대효과: [예상 성과 또는 효과]
             """
 
-    def _parse_generated_idea(self, generated_text: str, contest_info: Dict[str, str]) -> Dict[str, str]:
+    def _parse_generated_idea(
+        self, generated_text: str, contest_info: Dict[str, str]
+    ) -> Dict[str, str]:
         """AI 생성 결과를 구조화된 형태로 파싱"""
         idea = {
             "ai_name": "ChatGPT",
@@ -103,11 +112,11 @@ class OpenAIClient:
             "implementation": "",
             "expected_effect": "",
             "contest_info": contest_info,
-            "raw_response": generated_text
+            "raw_response": generated_text,
         }
 
         try:
-            lines = generated_text.split('\n')
+            lines = generated_text.split("\n")
             current_key = None
             for line in lines:
                 line = line.strip()
