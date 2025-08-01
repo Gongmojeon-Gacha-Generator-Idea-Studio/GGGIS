@@ -9,6 +9,9 @@ from src.ui_handlers import (
     refresh_and_reset_with_node_status,
     handle_idea_selection,
     handle_delete_idea,
+    handle_node_selection,
+    handle_edit_node,
+    handle_delete_node,
 )
 
 # 앱 시작 시 데이터 초기화
@@ -105,10 +108,23 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 "### AI로 생성된 아이디어를 확인하고 상세 내용을 볼 수 있습니다"
             )
 
+            # 검색 필드
+            idea_search_input = gr.Textbox(
+                label="🔍 공모전 제목 또는 아이디어 제목 검색",
+                placeholder="검색할 제목을 입력하세요...",
+                scale=2,
+            )
+
             # 아이디어 목록
             ideas_dataframe = gr.Dataframe(
                 value=get_ideas_dataframe(),
-                headers=["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"],
+                headers=[
+                    "생성일시",
+                    "공모전 제목",
+                    "아이디어 제목",
+                    "아이디어 개요",
+                    "AI 이름",
+                ],
                 interactive=False,
                 elem_id="ideas_table",
             )
@@ -151,6 +167,13 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
 
             # 이벤트 연결
 
+            # 검색 필드 이벤트
+            idea_search_input.change(
+                fn=filter_ideas,
+                inputs=[idea_search_input],
+                outputs=[ideas_dataframe],
+            )
+
             ideas_dataframe.select(
                 fn=handle_idea_selection,
                 outputs=[
@@ -160,10 +183,10 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     solution_display,
                     implementation_display,
                     expected_effect_display,
+                    created_at_display,
                     selected_idea_index,
                     delete_idea_btn,
                     delete_status,
-                    created_at_display,
                 ],
             )
 
@@ -199,6 +222,7 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     expected_effect_display,
                     created_at_display,
                     idea_generation_status,  # 아이디어 생성 상태 초기화
+                    idea_search_input,  # 검색 필드 초기화
                 ],
             )
 
@@ -337,6 +361,40 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                 elem_id="nodes_table",
             )
 
+            # 선택된 노드 상세 정보
+            gr.Markdown("#### 📋 선택된 노드 상세 정보")
+            gr.Markdown(
+                "*위 테이블에서 행을 클릭하면 해당 노드의 상세 정보가 표시됩니다.*"
+            )
+
+            with gr.Accordion("🔧 노드 상세 정보", open=True):
+                selected_node_title = gr.Textbox(label="노드 제목", interactive=True)
+                selected_node_description = gr.Textbox(
+                    label="노드 설명", lines=4, interactive=True
+                )
+                selected_node_tenant = gr.Textbox(label="테넌트", interactive=True)
+                selected_node_tags = gr.Textbox(
+                    label="태그 (콤마로 구분)", interactive=True
+                )
+                selected_node_created_at = gr.Textbox(
+                    label="생성일시", interactive=False
+                )
+
+            # 편집/삭제 관련 UI
+            selected_node_index = gr.State(-1)  # 선택된 노드 인덱스
+
+            with gr.Row():
+                edit_node_btn = gr.Button(
+                    "✏️ 선택된 노드 편집", variant="primary", visible=False
+                )
+                delete_node_btn = gr.Button(
+                    "🗑️ 선택된 노드 삭제", variant="stop", visible=False
+                )
+
+            node_action_status = gr.Textbox(
+                label="", interactive=False, visible=False, show_label=False
+            )
+
             # 이벤트 연결 - 모든 필터 변경 시 실시간 필터링
             for filter_component in [search_input, tenant_filter, tag_filter]:
                 filter_component.change(
@@ -344,6 +402,55 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     inputs=[search_input, tenant_filter, tag_filter],
                     outputs=[nodes_dataframe],
                 )
+
+            # 노드 선택 이벤트
+            nodes_dataframe.select(
+                fn=handle_node_selection,
+                outputs=[
+                    selected_node_title,
+                    selected_node_description,
+                    selected_node_tenant,
+                    selected_node_tags,
+                    selected_node_created_at,
+                    selected_node_index,
+                    edit_node_btn,
+                    delete_node_btn,
+                    node_action_status,
+                ],
+            )
+
+            # 노드 편집 이벤트
+            edit_node_btn.click(
+                fn=handle_edit_node,
+                inputs=[
+                    selected_node_index,
+                    selected_node_title,
+                    selected_node_description,
+                    selected_node_tenant,
+                    selected_node_tags,
+                ],
+                outputs=[
+                    node_action_status,
+                    nodes_dataframe,
+                ],
+            )
+
+            # 노드 삭제 이벤트
+            delete_node_btn.click(
+                fn=handle_delete_node,
+                inputs=[selected_node_index],
+                outputs=[
+                    node_action_status,
+                    nodes_dataframe,
+                    edit_node_btn,
+                    delete_node_btn,
+                    selected_node_title,
+                    selected_node_description,
+                    selected_node_tenant,
+                    selected_node_tags,
+                    selected_node_created_at,
+                ],
+            )
 
             # 내 노드 확인하기 탭 클릭시 자동 새로고침 및 상태 초기화
             def refresh_and_clear_status():
@@ -355,6 +462,15 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     gr.update(choices=tags, value=[]),  # 태그 필터 업데이트
                     "",  # 아이디어 생성 상태 초기화
                     "",  # 노드 생성 상태 초기화
+                    "노드를 선택해주세요.",  # 노드 제목 초기화
+                    "",  # 노드 설명 초기화
+                    "",  # 노드 테넌트 초기화
+                    "",  # 노드 태그 초기화
+                    "",  # 노드 생성일시 초기화
+                    -1,  # 노드 인덱스 초기화
+                    gr.update(visible=False),  # 편집 버튼 숨기기
+                    gr.update(visible=False),  # 삭제 버튼 숨기기
+                    gr.update(visible=False, value=""),  # 액션 상태 숨기기
                 )
 
             node_view_tab.select(
@@ -366,6 +482,15 @@ with gr.Blocks(title="", theme=gr.themes.Soft()) as demo:
                     tag_filter,
                     idea_generation_status,
                     create_status,
+                    selected_node_title,
+                    selected_node_description,
+                    selected_node_tenant,
+                    selected_node_tags,
+                    selected_node_created_at,
+                    selected_node_index,
+                    edit_node_btn,
+                    delete_node_btn,
+                    node_action_status,
                 ],
             )
 

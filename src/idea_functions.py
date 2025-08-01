@@ -3,6 +3,7 @@ import src.data_manager as dm
 from src.openai_client import create_openai_client
 from datetime import datetime
 import pytz
+import gradio as gr
 
 try:
     from gradio import SelectData
@@ -54,6 +55,7 @@ def generate_idea_with_chatgpt(
         generated_idea["id"] = current_time.strftime("%Y%m%d%H%M%S") + str(
             len(dm.ideas_data)
         )
+
         generated_idea["created_at"] = current_time.strftime("%Y-%m-%d %H:%M:%S")
         generated_idea["created_date"] = current_time.strftime("%Y-%m-%d")
         generated_idea["created_time"] = current_time.strftime("%H:%M:%S")
@@ -97,12 +99,18 @@ def generate_idea_with_chatgpt(
         )
 
 
-def get_ideas_dataframe():
-    """생성된 아이디어들을 데이터프레임으로 변환 (최신순 정렬)"""
+def get_ideas_dataframe(search_text=""):
+    """생성된 아이디어들을 데이터프레임으로 변환 (최신순 정렬, 검색 지원)"""
+    columns = [
+        "생성일시",
+        "공모전 제목",
+        "아이디어 제목",
+        "아이디어 개요",
+        "AI 이름",
+    ]
+
     if not dm.ideas_data:
-        return pd.DataFrame(
-            columns=["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"]
-        )
+        return pd.DataFrame(columns=columns)
 
     # 생성일시 기준으로 내림차순 정렬 (최신 아이디어가 위로)
     sorted_ideas = sorted(
@@ -115,9 +123,25 @@ def get_ideas_dataframe():
     for idx, idea in enumerate(sorted_ideas):
         # 원본 배열에서의 실제 인덱스 찾기
         original_index = dm.ideas_data.index(idea)
+        # 공모전 제목 추출 (contest_info 딕셔너리에서)
+        contest_title = "N/A"
+        if idea.get("contest_info") and isinstance(idea.get("contest_info"), dict):
+            contest_title = idea.get("contest_info", {}).get("title", "N/A")
+
+        # 검색 필터 적용 (공모전 제목 또는 아이디어 제목에서 검색)
+        if search_text:
+            idea_title = idea.get("title", "").lower()
+            contest_title_search = contest_title.lower()
+            search_lower = search_text.lower()
+
+            # 공모전 제목이나 아이디어 제목 중 하나라도 검색어를 포함하지 않으면 제외
+            if not (search_lower in idea_title or search_lower in contest_title_search):
+                continue
+
         df_data.append(
             {
                 "생성일시": idea.get("created_at", "N/A"),
+                "공모전 제목": contest_title,
                 "아이디어 제목": idea.get("title", "제목 없음"),
                 "아이디어 개요": idea.get("overview", "개요 없음"),
                 "AI 이름": idea.get("ai_name", "Unknown"),
@@ -125,9 +149,19 @@ def get_ideas_dataframe():
             }
         )
 
+    # 필터링 결과가 없어도 컬럼명이 유지되도록 빈 DataFrame 반환
+    if not df_data:
+        return pd.DataFrame(columns=columns)
+
     df = pd.DataFrame(df_data)
     # _original_index 컬럼은 UI에서 보이지 않도록 처리
-    return df[["생성일시", "아이디어 제목", "아이디어 개요", "AI 이름"]]
+    return df[["생성일시", "공모전 제목", "아이디어 제목", "아이디어 개요", "AI 이름"]]
+
+
+def filter_ideas(search_text):
+    """아이디어 검색 (공모전 제목 또는 아이디어 제목에서 검색)"""
+    df = get_ideas_dataframe(search_text)
+    return gr.update(value=df)
 
 
 def get_idea_details(selection_data):

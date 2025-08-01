@@ -6,6 +6,12 @@ from src.idea_functions import (
     refresh_ideas,
     delete_idea,
 )
+from src.node_functions import (
+    get_nodes_dataframe,
+    get_node_details_by_index,
+    update_node,
+    delete_node,
+)
 
 
 def clear_idea_generation_fields():
@@ -28,6 +34,7 @@ def refresh_and_reset():
         "",
         "",  # 생성일시 초기화 추가
         "",  # 아이디어 생성 상태 초기화 추가
+        "",  # 검색 필드 초기화 추가
     )
 
 
@@ -108,10 +115,10 @@ def handle_idea_selection(evt: gr.SelectData):
             idea_details[3],  # solution -> solution_display
             idea_details[4],  # implementation -> implementation_display
             idea_details[5],  # expected_effect -> expected_effect_display
+            idea_details[6],  # created_at -> created_at_display
             original_index,  # selected_idea_index
             gr.update(visible=True),  # delete_idea_btn
             gr.update(visible=False, value=""),  # delete_status
-            idea_details[6],  # created_at -> created_at_display
         )
 
     return (
@@ -170,4 +177,142 @@ def handle_delete_idea(selected_index):
             "",
             "",
             "",  # 생성일시 추가
+        )
+
+
+def handle_node_selection(evt: gr.SelectData):
+    """노드 선택 이벤트 처리"""
+    print(f"[DEBUG] Node SelectData evt.index: {evt.index}")
+    print(f"[DEBUG] Node SelectData evt.value: {evt.value}")
+
+    if evt.index is not None and len(evt.index) >= 1:
+        display_index = evt.index[0]  # 화면에 표시된 인덱스
+
+        # 정렬된 배열에서 원본 인덱스 찾기
+        if not dm.nodes_data:
+            return (
+                "노드를 선택해주세요.",
+                "",
+                "",
+                "",
+                "",
+                -1,
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False, value=""),
+            )
+
+        # 생성일시 기준으로 정렬된 노드 목록 생성
+        sorted_nodes = sorted(
+            dm.nodes_data,
+            key=lambda x: x.get("created_at", "1900-01-01 00:00:00"),
+            reverse=True,
+        )
+
+        if display_index >= len(sorted_nodes):
+            return (
+                "선택된 노드를 찾을 수 없습니다.",
+                "",
+                "",
+                "",
+                "",
+                -1,
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False, value=""),
+            )
+
+        # 선택된 노드의 원본 인덱스 찾기
+        selected_node = sorted_nodes[display_index]
+        original_index = dm.nodes_data.index(selected_node)
+
+        node_details = get_node_details_by_index(original_index)
+        # 노드 선택시 편집/삭제 버튼 표시
+        return (
+            node_details[0],  # title -> selected_node_title
+            node_details[1],  # description -> selected_node_description
+            node_details[2],  # tenant -> selected_node_tenant
+            node_details[3],  # tags -> selected_node_tags
+            node_details[4],  # created_at -> selected_node_created_at
+            original_index,  # selected_node_index
+            gr.update(visible=True),  # edit_node_btn
+            gr.update(visible=True),  # delete_node_btn
+            gr.update(visible=False, value=""),  # node_action_status
+        )
+
+    return (
+        "노드를 선택해주세요.",
+        "",
+        "",
+        "",
+        "",
+        -1,
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False, value=""),
+    )
+
+
+def handle_edit_node(selected_index, title, description, tenant, tags):
+    """노드 편집 이벤트 처리"""
+    if selected_index < 0:
+        return (
+            gr.update(visible=True, value="❌ 편집할 노드를 선택해주세요."),
+            get_nodes_dataframe(),
+        )
+
+    try:
+        result_message, updated_df = update_node(
+            selected_index, title, description, tenant, tags
+        )
+        return (
+            gr.update(visible=True, value=result_message),
+            updated_df,
+        )
+    except Exception as e:
+        return (
+            gr.update(visible=True, value=f"❌ 편집 중 오류가 발생했습니다: {str(e)}"),
+            get_nodes_dataframe(),
+        )
+
+
+def handle_delete_node(selected_index):
+    """노드 삭제 이벤트 처리"""
+    if selected_index < 0:
+        return (
+            gr.update(visible=True, value="❌ 삭제할 노드를 선택해주세요."),
+            get_nodes_dataframe(),
+            gr.update(visible=False),  # edit_node_btn
+            gr.update(visible=False),  # delete_node_btn
+            "노드를 선택해주세요.",
+            "",
+            "",
+            "",
+            "",
+        )
+
+    try:
+        result_message, updated_df = delete_node(selected_index)
+        return (
+            gr.update(visible=True, value=f"✅ {result_message}"),
+            updated_df,
+            gr.update(visible=False),  # edit_node_btn 숨기기
+            gr.update(visible=False),  # delete_node_btn 숨기기
+            "노드를 선택해주세요.",
+            "",
+            "",
+            "",
+            "",
+        )
+    except Exception as e:
+        return (
+            gr.update(visible=True, value=f"❌ 삭제 중 오류가 발생했습니다: {str(e)}"),
+            get_nodes_dataframe(),
+            gr.update(visible=False),  # edit_node_btn
+            gr.update(visible=False),  # delete_node_btn
+            "노드를 선택해주세요.",
+            "",
+            "",
+            "",
+            "",
         )

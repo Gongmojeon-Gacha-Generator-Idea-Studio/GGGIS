@@ -1,4 +1,5 @@
 import pandas as pd
+import gradio as gr
 import src.data_manager as dm
 from datetime import datetime
 
@@ -198,7 +199,8 @@ def get_nodes_dataframe(search_text="", selected_tenants=None, selected_tags=Non
 
 def filter_nodes_multi(search_text, selected_tenants, selected_tags):
     """다중 필터로 노드 필터링"""
-    return get_nodes_dataframe(search_text, selected_tenants, selected_tags)
+    df = get_nodes_dataframe(search_text, selected_tenants, selected_tags)
+    return gr.update(value=df)
 
 
 def get_all_tags():
@@ -223,3 +225,61 @@ def refresh_nodes():
     """노드 목록 새로고침"""
     dm.load_nodes()
     return get_nodes_dataframe(), get_all_tags(), get_all_tenants()
+
+
+def get_node_details_by_index(index):
+    """인덱스로 노드 상세 정보 가져오기"""
+    if 0 <= index < len(dm.nodes_data):
+        node = dm.nodes_data[index]
+        return (
+            node.get("title", ""),
+            node.get("description", ""),
+            node.get("tenant", ""),
+            ", ".join(node.get("tags", [])),
+            node.get("created_at", ""),
+        )
+    return ("노드를 선택해주세요.", "", "", "", "")
+
+
+def update_node(index, title, description, tenant, tags_str):
+    """노드 정보 업데이트"""
+    if not title or not description:
+        return "❌ 노드 제목과 설명을 모두 입력해주세요.", get_nodes_dataframe()
+
+    if not tenant:
+        return "❌ 테넌트를 입력해주세요.", get_nodes_dataframe()
+
+    # 태그를 리스트로 변환
+    tags_list = (
+        [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+    )
+
+    if not tags_list:
+        return "❌ 태그를 최소 1개 이상 입력해주세요.", get_nodes_dataframe()
+
+    if 0 <= index < len(dm.nodes_data):
+        dm.nodes_data[index].update(
+            {
+                "title": title,
+                "description": description,
+                "tenant": tenant.strip(),
+                "tags": tags_list,
+            }
+        )
+        dm.save_nodes()
+        return "✅ 노드가 성공적으로 수정되었습니다.", get_nodes_dataframe()
+
+    return "❌ 수정할 노드를 찾을 수 없습니다.", get_nodes_dataframe()
+
+
+def delete_node(index):
+    """노드 삭제"""
+    if 0 <= index < len(dm.nodes_data):
+        deleted_node = dm.nodes_data.pop(index)
+        dm.save_nodes()
+        return (
+            f"노드 '{deleted_node.get('title', '알 수 없음')}'가 삭제되었습니다.",
+            get_nodes_dataframe(),
+        )
+
+    return "❌ 삭제할 노드를 찾을 수 없습니다.", get_nodes_dataframe()
